@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heritage Travels - Calculator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="navbar">
+        <div class="logo">
+            <span class="logo-icon">🗺</span>
+            <strong>Heritage Travels</strong>
+        </div>
+        <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="calculator.html">Calculator</a></li>
+            <li><a href="#">About</a></li>
+        </ul>
+    </nav>
+
+    <br><br>
+
+    <!-- Custom Trip Budget Estimator -->
+    <section class="calculator-section" id="calculatorSection">
+        <div class="calc-header">
+            <h2>Custom Trip Budget Estimator</h2>
+            <span class="badge">195+ Countries</span>
+        </div>
+
+        <div class="calc-grid">
+            <div class="input-group">
+                <label>1. SELECTED COUNTRY</label>
+                <!-- Dito papasok ang nai-type na bansa mula sa Homepage -->
+                <input type="text" id="countryDisplay" readonly style="background-color: #f0f0f0;">
+            </div>
+
+            <div class="input-group">
+                <label>2. SELECT LANDMARK</label>
+                <select id="landmarkSelect">
+                    <option value="">Loading landmarks...</option>
+                </select>
+            </div>
+            
+            <div class="input-group">
+                <label>TRIP DURATION (DAYS)</label>
+                <input type="number" id="tripDuration" value="7" min="1">
+            </div>
+
+            <div class="input-group">
+                <label>TRAVELERS COUNT</label>
+                <input type="number" id="travelerCount" value="2" min="1">
+            </div>
+        </div>
+
+        <div class="travel-style">
+            <label>TRAVEL STYLE</label>
+            <div class="style-options">
+                <button class="style-btn" data-multiplier="0.5">🎒 Backpacker</button>
+                <button class="style-btn active" data-multiplier="1">🏨 Standard</button>
+                <button class="style-btn" data-multiplier="2.5">✨ Luxury</button>
+            </div>
+        </div>
+
+        <button id="calculateBtn" class="calc-submit">Recalculate Trip Budget</button>
+    </section>
+
+    <!-- Dashboard Results -->
+    <section class="dashboard-section" id="dashboard" style="display: none;">
+        <div class="total-banner">
+            <p>Total Budget</p>
+            <h1 id="totalBudgetDisplay">$0</h1>
+            <p id="budgetSubtitle">0 days x 0 travelers</p>
+        </div>
+
+        <div class="distribution-grid">
+            <div class="dist-card">
+                <h4>🏨 Accommodation</h4>
+                <h2 id="costAccom">$0</h2>
+            </div>
+            <div class="dist-card">
+                <h4>🍔 Food & Dining</h4>
+                <h2 id="costFood">$0</h2>
+            </div>
+            <div class="dist-card">
+                <h4>🚕 Local Transport</h4>
+                <h2 id="costTransport">$0</h2>
+            </div>
+            <div class="dist-card">
+                <h4>🎟️ Landmark Entry</h4>
+                <h2 id="costEntry">$0</h2>
+            </div>
+        </div>
+    </section>
+
+    <script src="app.js"></script>
+</body>
+</html>

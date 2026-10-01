@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heritage Travels - Home</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="navbar">
+        <div class="logo">
+            <span class="logo-icon">🗺</span>
+            <strong>Heritage Travels</strong>
+        </div>
+        <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="calculator.html">Calculator</a></li>
+            <li><a href="#">About</a></li>
+        </ul>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Plan Your Next Country<br>With Real Price Budget Estimator</h1>
+            <p>Accurate, verified travel cost estimates and details for UNESCO World Heritage Wonders.</p>
+            
+            <div class="search-bar">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="where are you traveling? (e.g. Philippines, Japan, Italy)">
+                <button id="heroCalculateBtn">Calculate Cost ➔</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Ipapakita pa rin natin ang lahat ng landmarks dito bilang gallery -->
+    <main class="container">
+        <h2 style="text-align: center; margin-bottom: 20px; color: #264653;">Explore All Landmarks</h2>
+        <div id="resultsGrid" class="grid">
+            <!-- JavaScript will inject all landmark cards here -->
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
