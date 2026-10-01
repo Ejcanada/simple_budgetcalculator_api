@@ -126,6 +126,7 @@ if (calculatorSection) {
     });
 
     // Compute Budget Logic
+    // Compute Budget Logic
     calculateBtn.addEventListener('click', () => {
         const selectedId = parseInt(landmarkSelect.value);
         if (!selectedId) return alert("Please select a landmark from the dropdown first.");
@@ -135,9 +136,12 @@ if (calculatorSection) {
         const travelers = parseInt(travelerCount.value) || 1;
         
         const baseEntryFee = parseFee(site.entry_fee);
-        const baseAccom = 100 * styleMultiplier;
-        const baseFood = 50 * styleMultiplier;
-        const baseTrans = 30 * styleMultiplier;
+        
+        // Dynamically use the new local hotel_rate from the API
+        const baseAccom = site.hotel_rate * styleMultiplier;
+        // Estimate food as 50% of accommodation, transport as 30%
+        const baseFood = (site.hotel_rate * 0.5) * styleMultiplier;
+        const baseTrans = (site.hotel_rate * 0.3) * styleMultiplier;
 
         const totalEntry = baseEntryFee * travelers; 
         const totalAccom = baseAccom * days * travelers;
@@ -145,13 +149,14 @@ if (calculatorSection) {
         const totalTrans = baseTrans * days * travelers;
         const grandTotal = totalEntry + totalAccom + totalFood + totalTrans;
 
-        document.getElementById('totalBudgetDisplay').textContent = `$${grandTotal.toLocaleString()}`;
-        document.getElementById('budgetSubtitle').textContent = `Based on ${days} days x ${travelers} travelers at ${site.title}`;
+        // Display results cleanly with the dynamic local currency attached
+        document.getElementById('totalBudgetDisplay').textContent = `${grandTotal.toLocaleString()} ${site.currency}`;
+        document.getElementById('budgetSubtitle').textContent = `Based on ${days} days x ${travelers} travelers at ${site.title} (in Local Currency)`;
         
-        document.getElementById('costAccom').textContent = `$${totalAccom.toLocaleString()}`;
-        document.getElementById('costFood').textContent = `$${totalFood.toLocaleString()}`;
-        document.getElementById('costTransport').textContent = `$${totalTrans.toLocaleString()}`;
-        document.getElementById('costEntry').textContent = `$${totalEntry.toLocaleString()}`;
+        document.getElementById('costAccom').textContent = `${totalAccom.toLocaleString()} ${site.currency}`;
+        document.getElementById('costFood').textContent = `${totalFood.toLocaleString()} ${site.currency}`;
+        document.getElementById('costTransport').textContent = `${totalTrans.toLocaleString()} ${site.currency}`;
+        document.getElementById('costEntry').textContent = `${totalEntry.toLocaleString()} ${site.currency}`;
 
         dashboard.style.display = 'block';
     });
