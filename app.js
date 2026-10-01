@@ -126,7 +126,6 @@ if (calculatorSection) {
     });
 
     // Compute Budget Logic
-    // Compute Budget Logic
     calculateBtn.addEventListener('click', () => {
         const selectedId = parseInt(landmarkSelect.value);
         if (!selectedId) return alert("Please select a landmark from the dropdown first.");
