@@ -35,23 +35,7 @@ class Landmark(BaseModel):
 
 # 
 landmarks = [
-    # --- ORIGINAL 20 ---
-    {"id": 1, "title": "Banaue Rice Terraces", 
-     "site_type": "Cultural Landscape", 
-     "established_year": 100, 
-     "visitor_rating": "4.9/5", 
-     "governing_body": "UNESCO", 
-     "notable_architects": 
-     "Ifugao Ancestors", 
-     "icon": "/images/banaue.jpg", 
-     "description": "2,000-year-old terraces carved into the mountains.",
-     "country":
-     "Philippines",
-     "city": 
-     "Banaue", 
-     "region": 
-     "Southeast Asia", 
-     "protection_status": "National Treasure", "annual_visitors": "120K", "entry_fee": "50 PHP", "currency": "PHP", "hotel_rate": 2500},
+    {"id": 1, "title": "Banaue Rice Terraces", "site_type": "Cultural Landscape", "established_year": 100, "visitor_rating": "4.9/5", "governing_body": "UNESCO", "notable_architects": "Ifugao Ancestors", "icon": "/images/banaue.jpg", "description": "2,000-year-old terraces carved into the mountains.", "country": "Philippines", "city": "Banaue", "region": "Southeast Asia", "protection_status": "National Treasure", "annual_visitors": "120K", "entry_fee": "50 PHP", "currency": "PHP", "hotel_rate": 2500},
     {"id": 2, "title": "Historic City of Vigan", "site_type": "Cultural Heritage", "established_year": 1572, "visitor_rating": "4.8/5", "governing_body": "UNESCO", "notable_architects": "Spanish Builders", "icon": "/images/vigan.jpg", "description": "Best-preserved example of a planned Spanish colonial town.", "country": "Philippines", "city": "Vigan", "region": "Southeast Asia", "protection_status": "Historic Center", "annual_visitors": "450K", "entry_fee": "Free", "currency": "PHP", "hotel_rate": 3000},
     {"id": 3, "title": "Colosseum", "site_type": "Ancient Monument", "established_year": 80, "visitor_rating": "4.9/5", "governing_body": "Ministry of Culture", "notable_architects": "Flavian Dynasty", "icon": "/images/colosseum.jpg", "description": "Iconic oval amphitheatre in the centre of Rome.", "country": "Italy", "city": "Rome", "region": "Europe", "protection_status": "Archeological Site", "annual_visitors": "6.0M", "entry_fee": "16 EUR", "currency": "EUR", "hotel_rate": 150},
     {"id": 4, "title": "Machu Picchu", "site_type": "Ancient Ruin", "established_year": 1450, "visitor_rating": "5.0/5", "governing_body": "UNESCO", "notable_architects": "Inca Civilization", "icon": "/images/machu.jpg", "description": "15th-century Inca citadel in the Eastern Cordillera.", "country": "Peru", "city": "Aguas Calientes", "region": "South America", "protection_status": "Historic Sanctuary", "annual_visitors": "1.5M", "entry_fee": "175 PEN", "currency": "PEN", "hotel_rate": 400},
