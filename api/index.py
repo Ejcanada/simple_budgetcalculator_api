@@ -28,6 +28,7 @@ class Landmark(BaseModel):
     icon: str
     description: str
     country: str
+    city: str
     region: str
     protection_status: str
     annual_visitors: str
