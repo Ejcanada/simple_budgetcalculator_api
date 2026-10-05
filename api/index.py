@@ -17,6 +17,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 class Landmark(BaseModel):
     id: int
     title: str
@@ -34,7 +35,7 @@ class Landmark(BaseModel):
     annual_visitors: str
     entry_fee: str
     currency: str
-    hotel_rate: str
+    hotel_rate: int 
 
 # 
 landmarks = [
@@ -105,7 +106,7 @@ def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
             detail="401 error Invalid, Missing api key."
         )
     return True
- # HOME
+
 # HOME (Public)
 @app.get("/")
 def home():
