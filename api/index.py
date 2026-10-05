@@ -32,6 +32,8 @@ class Landmark(BaseModel):
     protection_status: str
     annual_visitors: str
     entry_fee: str
+    currency: str
+    hotel_rate: str
 
 # 
 landmarks = [
