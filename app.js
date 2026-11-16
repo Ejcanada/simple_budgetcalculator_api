@@ -1,6 +1,6 @@
 // Live Vercel API URL
 const API_URL = "https://simple-budgetcalculator-api-blush.vercel.app";
-const API_KEY = "my_secret_landmark_key";
+const FETCH_OPTIONS = {};
 const FETCH_OPTIONS = { headers: { "x-api-key": API_KEY } };
 
 // Shared Function: Para sa pag-extract ng numero sa entry fee
