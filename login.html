@@ -1,1 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heritage Travels - Login</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .login-wrap { max-width: 420px; margin: 60px auto; background: white; padding: 35px 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .login-wrap h2 { color: #264653; margin-bottom: 6px; }
+        .login-wrap p.sub { color: #777; margin-bottom: 22px; font-size: 0.95rem; }
+        .login-wrap .input-group { margin-bottom: 16px; }
+        .msg { margin-top: 15px; padding: 10px 12px; border-radius: 6px; font-size: 0.9rem; display: none; }
+        .msg.error { background: #fdecea; color: #b3261e; display: block; }
+        .msg.ok { background: #e9f5f4; color: #1f7a6f; display: block; }
+        .switch { margin-top: 18px; text-align: center; font-size: 0.9rem; color: #555; }
+        .switch a { color: #2a9d8f; font-weight: bold; cursor: pointer; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">
+            <span class="logo-icon">🗺</span>
+            <strong>Heritage Travels</strong>
+        </div>
+    </nav>
 
+    <main class="login-wrap">
+        <h2 id="formTitle">Login</h2>
+        <p class="sub" id="formSub">Please log in to see landmarks and use the budget calculator.</p>
+
+        <form id="authForm">
+            <div class="input-group" id="nameGroup" style="display:none;">
+                <label for="fullName">FULL NAME</label>
+                <input type="text" id="fullName" autocomplete="name" maxlength="100">
+            </div>
+            <div class="input-group">
+                <label for="email">EMAIL</label>
+                <input type="email" id="email" autocomplete="email" required>
+            </div>
+            <div class="input-group">
+                <label for="password">PASSWORD</label>
+                <input type="password" id="password" autocomplete="current-password" maxlength="72" required>
+                <small id="passHint" style="display:none; color:#777;">At least 8 characters, with a letter and a number.</small>
+            </div>
+            <button type="submit" id="submitBtn" class="calc-submit">Login</button>
+        </form>
+
+        <div class="msg" id="message"></div>
+
+        <div class="switch" id="switchText">
+            No account yet? <a id="switchLink">Create one</a>
+        </div>
+    </main>
+
+    <script>
+        // same domain as the API, so no full URL is needed
+        const API_URL = "";
+
+        // If the user is already logged in, go straight to the home page
+        try { if (localStorage.getItem("token")) { window.location.href = "index.html"; } } catch (e) { /* ignore */ }
+
+        let mode = "login";
+        const form = document.getElementById("authForm");
+        const message = document.getElementById("message");
+        const submitBtn = document.getElementById("submitBtn");
+
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = "msg " + type;
+        }
+
+        function setMode(newMode) {
+            mode = newMode;
+            const isLogin = mode === "login";
+            document.getElementById("formTitle").textContent = isLogin ? "Login" : "Create Account";
+            document.getElementById("formSub").textContent = isLogin
+                ? "Please log in to see landmarks and use the budget calculator."
+                : "Create your account. Your password is saved as a secure hash.";
+            submitBtn.textContent = isLogin ? "Login" : "Create Account";
+            document.getElementById("password").autocomplete = isLogin ? "current-password" : "new-password";
+            document.getElementById("nameGroup").style.display = isLogin ? "none" : "block";
+            document.getElementById("passHint").style.display = isLogin ? "none" : "block";
+            document.getElementById("switchText").innerHTML = isLogin
+                ? 'No account yet? <a id="switchLink">Create one</a>'
+                : 'Already have an account? <a id="switchLink">Login</a>';
+            document.getElementById("switchLink").addEventListener("click", () => setMode(isLogin ? "register" : "login"));
+            message.className = "msg";
+        }
+        document.getElementById("switchLink").addEventListener("click", () => setMode("register"));
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+            const path = mode === "login" ? "/auth/login" : "/auth/register";
+
+            submitBtn.disabled = true;
+            message.className = "msg";
+            try {
+                const payload = { email: email, password: password };
+                if (mode === "register") { payload.full_name = document.getElementById("fullName").value.trim(); }
+                const response = await fetch(API_URL + path, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    let detail = "Please check your details and try again.";
+                    if (typeof data.detail === "string") {
+                        detail = data.detail;
+                    } else if (mode === "register") {
+                        detail = "Please enter your name, a valid email, and a password of at least 8 characters with a letter and a number.";
+                    } else {
+                        detail = "Please enter a valid email and your password.";
+                    }
+                    showMessage(detail, "error");
+                    return;
+                }
+
+                if (mode === "register") {
+                    showMessage(data.message || "Account created. You can log in now.", "ok");
+                    setMode("login");
+                    showMessage(data.message || "Account created. You can log in now.", "ok");
+                    return;
+                }
+
+                try {
+                    localStorage.setItem("token", data.access_token);
+                    localStorage.setItem("email", data.email);
+                } catch (err) {
+                    showMessage("Your browser blocked saving the login. Please allow site storage.", "error");
+                    return;
+                }
+                window.location.href = "index.html";
+            } catch (err) {
+                showMessage("Cannot reach the server. Please try again.", "error");
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
