@@ -45,6 +45,37 @@ function parseFee(feeString) {
     return match ? parseFloat(match[0]) : 0;
 }
 
+// Shared Function: send a request with the login token and a JSON body
+async function apiRequest(path, method, body) {
+    const options = { method: method, headers: { Authorization: "Bearer " + getToken() } };
+    if (body !== undefined) {
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+    }
+    const response = await fetch(`${API_URL}${path}`, options);
+    if (response.status === 401) { logout(); throw new Error("Login required"); }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { throw new Error(typeof data.detail === "string" ? data.detail : "Request failed."); }
+    return data;
+}
+
+// Landmark ids the logged-in user saved as favorites
+let favoriteIds = new Set();
+
+async function loadFavorites() {
+    try {
+        const data = await apiRequest("/favorites", "GET");
+        favoriteIds = new Set(data.favorites.map(f => f.landmark.id));
+    } catch (error) {
+        console.error("Could not load favorites:", error);
+    }
+}
+
+// Shared Function: make text safe before putting it inside HTML
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 // Shared Function: Para mag-display ng cards
 function displayData(landmarks, gridElement) {
     gridElement.innerHTML = "";
@@ -56,13 +87,39 @@ function displayData(landmarks, gridElement) {
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
-            <img src=".${site.icon}" alt="${site.title}" class="card-img" onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
+            <img src=".${escapeHtml(site.icon)}" alt="${escapeHtml(site.title)}" class="card-img" onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
             <div class="card-content">
-                <h3>${site.title}</h3>
-                <p><strong>Country:</strong> ${site.country}</p>
-                <p><strong>Entry Fee:</strong> <span class="fee">${site.entry_fee}</span></p>
+                <h3>${escapeHtml(site.title)}</h3>
+                <p><strong>Country:</strong> ${escapeHtml(site.country)}</p>
+                <p><strong>Entry Fee:</strong> <span class="fee">${escapeHtml(site.entry_fee)}</span></p>
             </div>
         `;
+
+        // Save / Saved button (favorites table)
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'fav-btn';
+        const showState = () => {
+            saveBtn.textContent = favoriteIds.has(site.id) ? '♥ Saved' : '♡ Save';
+            saveBtn.classList.toggle('saved', favoriteIds.has(site.id));
+        };
+        showState();
+        saveBtn.addEventListener('click', async () => {
+            saveBtn.disabled = true;
+            try {
+                if (favoriteIds.has(site.id)) {
+                    await apiRequest(`/favorites/${site.id}`, "DELETE");
+                    favoriteIds.delete(site.id);
+                } else {
+                    await apiRequest(`/favorites/${site.id}`, "POST");
+                    favoriteIds.add(site.id);
+                }
+            } catch (error) {
+                alert(error.message);
+            }
+            saveBtn.disabled = false;
+            showState();
+        });
+        card.querySelector('.card-content').appendChild(saveBtn);
         gridElement.appendChild(card);
     });
 }
@@ -91,6 +148,7 @@ if (heroCalculateBtn) {
             const response = await fetch(`${API_URL}/landmarks`, FETCH_OPTIONS);
             if (response.status === 401) { logout(); return; }
             const data = await response.json();
+            await loadFavorites();
             displayData(data.landmarks, resultsGrid);
         } catch (error) {
             console.error("Fetch failed:", error);
@@ -194,6 +252,105 @@ if (calculatorSection) {
         document.getElementById('costTransport').textContent = `${totalTrans.toLocaleString()} ${site.currency}`;
         document.getElementById('costEntry').textContent = `${totalEntry.toLocaleString()} ${site.currency}`;
 
+        // Remember this result so "Save this trip" can store it in the trips table
+        lastEstimate = { landmark_id: site.id, nights: days, travelers: travelers, total: grandTotal, currency: site.currency };
+        saveTripMsg.textContent = "";
         dashboard.style.display = 'block';
+        loadReviews(site.id);
+    });
+
+    // ---------- Save this trip (trips table) ----------
+    let lastEstimate = null;
+    const saveTripBtn = document.getElementById('saveTripBtn');
+    const saveTripMsg = document.getElementById('saveTripMsg');
+    const tripsList = document.getElementById('tripsList');
+
+    async function loadTrips() {
+        try {
+            const data = await apiRequest("/trips", "GET");
+            tripsList.innerHTML = "";
+            if (data.trips.length === 0) {
+                tripsList.textContent = "No saved trips yet.";
+                return;
+            }
+            data.trips.forEach(trip => {
+                const row = document.createElement('div');
+                row.className = 'trip-row';
+                const text = document.createElement('span');
+                const name = trip.landmark ? trip.landmark.title : "Deleted landmark";
+                text.textContent = `${name}: ${trip.nights} days, ${trip.travelers} travelers, ` +
+                    `${Number(trip.total).toLocaleString()} ${trip.currency || ""}`;
+                const del = document.createElement('button');
+                del.className = 'small-btn';
+                del.textContent = 'Delete';
+                del.addEventListener('click', async () => {
+                    try { await apiRequest(`/trips/${trip.id}`, "DELETE"); loadTrips(); }
+                    catch (error) { alert(error.message); }
+                });
+                row.appendChild(text);
+                row.appendChild(del);
+                tripsList.appendChild(row);
+            });
+        } catch (error) {
+            console.error("Could not load trips:", error);
+        }
+    }
+    loadTrips();
+
+    saveTripBtn.addEventListener('click', async () => {
+        if (!lastEstimate) return;
+        saveTripBtn.disabled = true;
+        try {
+            await apiRequest("/trips", "POST", lastEstimate);
+            saveTripMsg.textContent = "Trip saved.";
+            loadTrips();
+        } catch (error) {
+            saveTripMsg.textContent = error.message;
+        }
+        saveTripBtn.disabled = false;
+    });
+
+    // ---------- Reviews (reviews table) ----------
+    const reviewList = document.getElementById('reviewList');
+    const reviewRating = document.getElementById('reviewRating');
+    const reviewComment = document.getElementById('reviewComment');
+    const reviewBtn = document.getElementById('reviewBtn');
+    const reviewMsg = document.getElementById('reviewMsg');
+
+    async function loadReviews(landmarkId) {
+        try {
+            const data = await apiRequest(`/landmarks/${landmarkId}/reviews`, "GET");
+            reviewList.innerHTML = "";
+            if (data.reviews.length === 0) {
+                reviewList.textContent = "No reviews yet. Be the first!";
+                return;
+            }
+            data.reviews.forEach(review => {
+                const row = document.createElement('p');
+                const who = review.user ? review.user.full_name : "User";
+                row.textContent = `${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)} ${who}` +
+                    (review.comment ? `: ${review.comment}` : "");
+                reviewList.appendChild(row);
+            });
+        } catch (error) {
+            console.error("Could not load reviews:", error);
+        }
+    }
+
+    reviewBtn.addEventListener('click', async () => {
+        if (!lastEstimate) return;
+        reviewBtn.disabled = true;
+        try {
+            await apiRequest(`/landmarks/${lastEstimate.landmark_id}/reviews`, "POST", {
+                rating: parseInt(reviewRating.value),
+                comment: reviewComment.value.trim() || null
+            });
+            reviewMsg.textContent = "Review posted.";
+            reviewComment.value = "";
+            loadReviews(lastEstimate.landmark_id);
+        } catch (error) {
+            reviewMsg.textContent = error.message;
+        }
+        reviewBtn.disabled = false;
     });
 }
