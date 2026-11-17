@@ -1,7 +1,42 @@
-// Live Vercel API URL
-const API_URL = "simple-budgetcalculator-api-blush.vercel.app";
-const FETCH_OPTIONS = {};
-const FETCH_OPTIONS = { headers: { "x-api-key": API_KEY } };
+// The website and the API are on the same domain, so no full URL is needed
+const API_URL = "";
+
+// ==========================================
+// LOGIN CHECK (runs on every page except login.html)
+// ==========================================
+function getToken() {
+    try { return localStorage.getItem("token"); } catch (e) { return null; }
+}
+
+function logout() {
+    try {
+        localStorage.removeItem("token");
+        localStorage.removeItem("email");
+    } catch (e) { /* ignore */ }
+    window.location.href = "login.html";
+}
+
+// No token means the user is not logged in, so go to the login page
+if (!getToken()) {
+    window.location.href = "login.html";
+}
+
+// Every API request sends the login token
+const FETCH_OPTIONS = { headers: { Authorization: "Bearer " + getToken() } };
+
+// Add a Logout link with the user's email to the navigation bar
+const navLinks = document.querySelector(".nav-links");
+if (navLinks) {
+    let email = "";
+    try { email = localStorage.getItem("email") || ""; } catch (e) { /* ignore */ }
+    const li = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = "#";
+    link.textContent = email ? "Logout (" + email + ")" : "Logout";
+    link.addEventListener("click", (e) => { e.preventDefault(); logout(); });
+    li.appendChild(link);
+    navLinks.appendChild(li);
+}
 
 // Shared Function: Para sa pag-extract ng numero sa entry fee
 function parseFee(feeString) {
@@ -54,6 +89,7 @@ if (heroCalculateBtn) {
     async function loadHomeGallery() {
         try {
             const response = await fetch(`${API_URL}/landmarks`, FETCH_OPTIONS);
+            if (response.status === 401) { logout(); return; }
             const data = await response.json();
             displayData(data.landmarks, resultsGrid);
         } catch (error) {
@@ -88,6 +124,7 @@ if (calculatorSection) {
     async function initCalculator() {
         try {
             const response = await fetch(`${API_URL}/landmarks`, FETCH_OPTIONS);
+            if (response.status === 401) { logout(); return; }
             const data = await response.json();
             allLandmarks = data.landmarks;
 
