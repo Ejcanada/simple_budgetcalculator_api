@@ -122,7 +122,7 @@ def db_delete_landmark(landmark_id):
 
 # ----- users table (each user has a role_id that points to the roles table) -----
 def db_get_user_by_email(email):
-    result = run(get_db().table("users").select("*, role:roles(admin, user)").eq("email", email)).data
+    result = run(get_db().table("users").select("*, role:roles(role)").eq("email", email)).data
     if len(result) == 0:
         return None
     return result[0]
@@ -130,7 +130,7 @@ def db_get_user_by_email(email):
 
 def db_get_user_by_id(user_id):
     result = run(
-        get_db().table("users").select("id, full_name, email, is_active, role:roles(admin, user)").eq("id", user_id)
+        get_db().table("users").select("id, full_name, email, is_active, role:roles(role)").eq("id", user_id)
     ).data
     if len(result) == 0:
         return None
@@ -168,9 +168,9 @@ FAKE_HASH = hash_password("not-a-real-password-1")
 
 
 def role_name(user):
-    """Return 'admin' or 'user' from the role flags that come from the roles table."""
+    """Return 'admin' or 'user' from the role text in the roles table."""
     role = user.get("role") or {}
-    if role.get("admin"):
+    if role.get("role") == "admin":
         return "admin"
     return "user"
 
