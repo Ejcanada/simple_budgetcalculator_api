@@ -1,5 +1,5 @@
 // Live Vercel API URL
-const API_URL = "simple-budgetcalculator-api-z9f2.vercel.app";
+const API_URL = "simple-budgetcalculator-api-blush.vercel.app";
 const FETCH_OPTIONS = {};
 const FETCH_OPTIONS = { headers: { "x-api-key": API_KEY } };
 
