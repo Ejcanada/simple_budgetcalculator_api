@@ -41,7 +41,7 @@
             <div class="input-group">
                 <label for="password">PASSWORD</label>
                 <input type="password" id="password" autocomplete="current-password" maxlength="72" required>
-                <small id="passHint" style="display:none; color:#777;">At least 8 characters, with a letter and a number.</small>
+                <small id="passHint" style="display:none; color:#777;">At least 6 characters.</small>
             </div>
             <button type="submit" id="submitBtn" class="calc-submit">Login</button>
         </form>
@@ -108,7 +108,7 @@
                 const data = await response.json().catch(() => ({}));
 
                 if (!response.ok) {
-                    let detail = "Please check your details and try again.";
+                    let detail = "Server error (" + response.status + "). Please try again.";
                     if (typeof data.detail === "string") {
                         detail = data.detail;
                     } else if (Array.isArray(data.detail) && data.detail.length > 0) {
@@ -120,7 +120,7 @@
                             return (names[field] || field || "Input") + ": " + msg;
                         }).join(" | ");
                     } else if (mode === "register") {
-                        detail = "Please enter your name, a valid email, and a password of at least 8 characters with a letter and a number.";
+                        detail = "Please enter your name, a valid email, and a password of at least 6 characters.";
                     } else {
                         detail = "Please enter a valid email and your password.";
                     }
