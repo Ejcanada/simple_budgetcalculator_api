@@ -23,7 +23,7 @@
   ],
   "routes": [
     {
-      "src": "/(landmarks|auth|health|docs|redoc|openapi\\.json)(/.*)?",
+      "src": "/(landmarks|auth|health|favorites|trips|reviews|docs|redoc|openapi\\.json)(/.*)?",
       "dest": "/api/index.py"
     },
     {
