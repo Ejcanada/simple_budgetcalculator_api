@@ -111,6 +111,14 @@
                     let detail = "Please check your details and try again.";
                     if (typeof data.detail === "string") {
                         detail = data.detail;
+                    } else if (Array.isArray(data.detail) && data.detail.length > 0) {
+                        // validation errors: show which field failed and why
+                        const names = { full_name: "Full name", email: "Email", password: "Password" };
+                        detail = data.detail.map((d) => {
+                            const field = d.loc && d.loc.length ? d.loc[d.loc.length - 1] : "";
+                            const msg = String(d.msg || "").replace(/^Value error, /, "");
+                            return (names[field] || field || "Input") + ": " + msg;
+                        }).join(" | ");
                     } else if (mode === "register") {
                         detail = "Please enter your name, a valid email, and a password of at least 8 characters with a letter and a number.";
                     } else {
