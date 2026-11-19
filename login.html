@@ -108,21 +108,14 @@
                 const data = await response.json().catch(() => ({}));
 
                 if (!response.ok) {
-                    let detail = "Server error (" + response.status + "). Please try again.";
+                    let detail = "Please check your details and try again.";
                     if (typeof data.detail === "string") {
                         detail = data.detail;
                     } else if (Array.isArray(data.detail) && data.detail.length > 0) {
-                        // validation errors: show which field failed and why
-                        const names = { full_name: "Full name", email: "Email", password: "Password" };
-                        detail = data.detail.map((d) => {
-                            const field = d.loc && d.loc.length ? d.loc[d.loc.length - 1] : "";
-                            const msg = String(d.msg || "").replace(/^Value error, /, "");
-                            return (names[field] || field || "Input") + ": " + msg;
-                        }).join(" | ");
-                    } else if (mode === "register") {
-                        detail = "Please enter your name, a valid email, and a password of at least 6 characters.";
-                    } else {
-                        detail = "Please enter a valid email and your password.";
+                        // show which field is wrong, for example: "password: String should have at least 6 characters"
+                        const first = data.detail[0];
+                        const field = first.loc ? first.loc[first.loc.length - 1] : "details";
+                        detail = field + ": " + first.msg;
                     }
                     showMessage(detail, "error");
                     return;
