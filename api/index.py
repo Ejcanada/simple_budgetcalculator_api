@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -223,9 +225,14 @@ def role_name(user):
 # ==========================================
 def get_jwt_secret():
     secret = os.getenv("JWT_SECRET")
-    if not secret or len(secret) < 32:
-        raise HTTPException(status_code=503, detail="Login is not configured.")
-    return secret
+    if secret and len(secret) >= 32:
+        return secret
+    # JWT_SECRET is missing or too short. Instead of blocking every login, derive a signing
+    # secret from the database secret key (it is already secret and is never sent to the browser).
+    db_key = os.getenv("SUPABASE_SERVICE_KEY")
+    if db_key:
+        return hmac.new(db_key.encode("utf-8"), b"heritage-travels-login-token", hashlib.sha256).hexdigest()
+    raise HTTPException(status_code=503, detail="Login is not configured.")
 
 
 def make_token(user_id):
