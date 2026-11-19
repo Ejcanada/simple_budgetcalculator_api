@@ -37,8 +37,8 @@ app.add_middleware(
 # SETTINGS
 # ==========================================
 TOKEN_MINUTES = 60        # how long a login lasts
-MAX_FAILED_LOGINS = 5     # wrong passwords before the account is locked
-LOCK_MINUTES = 15         # how long the account stays locked
+MAX_FAILED_LOGINS = 10    # wrong passwords before the account is locked
+LOCK_MINUTES = 5          # how long the account stays locked
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
@@ -69,6 +69,7 @@ def run(query, duplicate_message="A landmark with this title already exists."):
     except HTTPException:
         raise
     except Exception as error:
+        print("DATABASE ERROR:", repr(error))  # visible in Vercel logs only
         code = getattr(error, "code", None)
         if code == "23505":  # the value must be unique but it already exists
             raise HTTPException(status_code=409, detail=duplicate_message)
@@ -123,6 +124,17 @@ def db_delete_landmark(landmark_id):
 # ----- users table (each user has a role_id that points to the roles table) -----
 def db_get_user_by_email(email):
     result = run(get_db().table("users").select("*, role:roles(role)").eq("email", email)).data
+    if len(result) == 0:
+        return None
+    return result[0]
+
+
+def db_get_user_by_login(login_name):
+    """The login box accepts an email or a username (not case sensitive)."""
+    user = db_get_user_by_email(login_name)
+    if user is not None:
+        return user
+    result = run(get_db().table("users").select("*, role:roles(role)").eq("username", login_name)).data
     if len(result) == 0:
         return None
     return result[0]
@@ -277,8 +289,9 @@ class RegisterData(BaseModel):
 class LoginData(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
-    email: str = Field(max_length=254, pattern=EMAIL_PATTERN)
-    password: str = Field(min_length=1, max_length=72)
+    # "email" can hold an email or a username (the field keeps this name for the login page)
+    email: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=200)
 
     @field_validator("email")
     @classmethod
@@ -378,7 +391,7 @@ def register(data: RegisterData):
 
 @app.post("/auth/login")
 def login(data: LoginData):
-    user = db_get_user_by_email(data.email)
+    user = db_get_user_by_login(data.email)
     now = datetime.now(timezone.utc)
 
     # 1. Is the account locked because of too many wrong passwords?
@@ -417,6 +430,7 @@ def login(data: LoginData):
         "token_type": "bearer",
         "expires_in_minutes": TOKEN_MINUTES,
         "email": user["email"],
+        "username": user.get("username"),
         "full_name": user["full_name"],
         "role": role_name(user),
     }
