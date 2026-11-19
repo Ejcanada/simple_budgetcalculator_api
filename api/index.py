@@ -1,7 +1,7 @@
 import os
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 import bcrypt
 import jwt
@@ -120,72 +120,6 @@ def db_delete_landmark(landmark_id):
     return len(result) > 0
 
 
-# ----- favorites table (many-to-many: users <-> landmarks) -----
-def db_get_favorites(user_id):
-    return run(
-        get_db().table("favorites").select("id, created_at, landmark:landmarks(*)").eq("user_id", user_id).order("id")
-    ).data
-
-
-def db_add_favorite(user_id, landmark_id):
-    new_favorite = {"user_id": user_id, "landmark_id": landmark_id}
-    return run(
-        get_db().table("favorites").insert(new_favorite), duplicate_message="You already saved this landmark."
-    ).data[0]
-
-
-def db_delete_favorite(user_id, landmark_id):
-    # user_id is in the filter, so a user can only delete their own favorites
-    result = run(get_db().table("favorites").delete().eq("user_id", user_id).eq("landmark_id", landmark_id)).data
-    return len(result) > 0
-
-
-# ----- trips table (saved budget estimates) -----
-def db_get_trips(user_id):
-    return run(
-        get_db()
-        .table("trips")
-        .select("id, nights, travelers, total, currency, created_at, landmark:landmarks(id, title, country)")
-        .eq("user_id", user_id)
-        .order("id", desc=True)
-    ).data
-
-
-def db_add_trip(user_id, data):
-    new_trip = dict(data, user_id=user_id)
-    return run(get_db().table("trips").insert(new_trip)).data[0]
-
-
-def db_delete_trip(user_id, trip_id):
-    result = run(get_db().table("trips").delete().eq("id", trip_id).eq("user_id", user_id)).data
-    return len(result) > 0
-
-
-# ----- reviews table (rating 1 to 5 and a comment) -----
-def db_get_reviews(landmark_id):
-    return run(
-        get_db()
-        .table("reviews")
-        .select("id, rating, comment, created_at, user:users(full_name)")
-        .eq("landmark_id", landmark_id)
-        .order("id", desc=True)
-    ).data
-
-
-def db_add_review(user_id, landmark_id, rating, comment):
-    new_review = {"user_id": user_id, "landmark_id": landmark_id, "rating": rating, "comment": comment}
-    return run(
-        get_db().table("reviews").insert(new_review), duplicate_message="You already reviewed this landmark."
-    ).data[0]
-
-
-def db_delete_review(review_id, user_id, is_admin):
-    query = get_db().table("reviews").delete().eq("id", review_id)
-    if not is_admin:  # normal users can only delete their own reviews
-        query = query.eq("user_id", user_id)
-    return len(run(query).data) > 0
-
-
 # ----- users table (each user has a role_id that points to the roles table) -----
 def db_get_user_by_email(email):
     result = run(get_db().table("users").select("*, role:roles(role)").eq("email", email)).data
@@ -212,6 +146,37 @@ def db_add_user(full_name, email, password_hash):
 
 def db_update_user(user_id, changes):
     run(get_db().table("users").update(changes).eq("id", user_id))
+
+
+# ----- favorites table (user_id -> users.id, landmark_id -> landmarks.id) -----
+def db_get_favorites(user_id):
+    query = get_db().table("favorites").select("id, created_at, landmark:landmarks(*)").eq("user_id", user_id)
+    return run(query.order("id")).data
+
+
+def db_add_favorite(user_id, landmark_id):
+    new_favorite = {"user_id": user_id, "landmark_id": landmark_id}
+    return run(get_db().table("favorites").insert(new_favorite), duplicate_message="Already in your favorites.").data[0]
+
+
+def db_delete_favorite(user_id, landmark_id):
+    query = get_db().table("favorites").delete().eq("user_id", user_id).eq("landmark_id", landmark_id)
+    return len(run(query).data) > 0
+
+
+# ----- trips table (saved budget estimates) -----
+def db_get_trips(user_id):
+    query = get_db().table("trips").select("*, landmark:landmarks(title, country)").eq("user_id", user_id)
+    return run(query.order("id", desc=True)).data
+
+
+def db_add_trip(data):
+    return run(get_db().table("trips").insert(data)).data[0]
+
+
+def db_delete_trip(user_id, trip_id):
+    query = get_db().table("trips").delete().eq("id", trip_id).eq("user_id", user_id)
+    return len(run(query).data) > 0
 
 
 # ==========================================
@@ -290,7 +255,7 @@ def require_admin(user=Depends(require_user)):
 # DATA MODELS (validation rules)
 # ==========================================
 class RegisterData(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     full_name: str = Field(min_length=1, max_length=100)
     email: str = Field(max_length=254, pattern=EMAIL_PATTERN)
@@ -303,14 +268,14 @@ class RegisterData(BaseModel):
 
     @field_validator("password")
     @classmethod
-    def check_password_rules(cls, value):
+    def check_password_length(cls, value):
         if len(value.encode("utf-8")) > 72:
             raise ValueError("password is too long")
         return value
 
 
 class LoginData(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     email: str = Field(max_length=254, pattern=EMAIL_PATTERN)
     password: str = Field(min_length=1, max_length=72)
@@ -319,6 +284,17 @@ class LoginData(BaseModel):
     @classmethod
     def make_email_lowercase(cls, value):
         return value.lower()
+
+
+class TripCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    landmark_id: int = Field(ge=1)
+    travel_style: Literal["budget", "standard", "luxury"]
+    days: int = Field(ge=1, le=365)
+    travelers: int = Field(ge=1, le=100)
+    total_cost: float = Field(ge=0, le=1000000000)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
 
 
 class LandmarkCreate(BaseModel):
@@ -377,23 +353,6 @@ class LandmarkUpdate(BaseModel):
         if value is not None and not value.startswith("/images/"):
             raise ValueError("icon must start with /images/")
         return value
-
-
-class TripCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    landmark_id: int = Field(ge=1)
-    nights: int = Field(gt=0, le=365)
-    travelers: int = Field(gt=0, le=1000)
-    total: float = Field(ge=0, le=1000000000000)
-    currency: Optional[str] = Field(default=None, pattern=r"^[A-Z]{3}$")
-
-
-class ReviewCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    rating: int = Field(ge=1, le=5)
-    comment: Optional[str] = Field(default=None, max_length=500)
 
 
 # ==========================================
@@ -477,7 +436,7 @@ def home():
     return {
         "message": "Welcome to the World Heritage Sites API!",
         "count": result.count,
-        "endpoints": ["/health", "/auth/login", "/auth/register", "/landmarks", "/landmarks/{id}", "/landmarks/search?q=", "/favorites", "/trips", "/landmarks/{id}/reviews"],
+        "endpoints": ["/health", "/auth/login", "/auth/register", "/landmarks", "/landmarks/{id}", "/landmarks/search?q=", "/favorites", "/trips"],
     }
 
 
@@ -523,7 +482,7 @@ def get_landmark(landmark_id: int = Path(..., ge=1)):
 # ==========================================
 # LANDMARK ROUTES - CREATE, UPDATE, DELETE (admin only)
 # ==========================================
-@app.post("/landmarks", status_code=201, dependencies=[Depends(require_admin)])
+@app.post("/landmarks", status_code=201)
 def create_landmark(landmark: LandmarkCreate, admin=Depends(require_admin)):
     data = landmark.model_dump()
     data["created_by"] = admin["id"]  # remember which admin added this landmark
@@ -549,13 +508,8 @@ def delete_landmark(landmark_id: int = Path(..., ge=1)):
     return {"message": "Landmark deleted.", "id": landmark_id}
 
 
-def landmark_must_exist(landmark_id):
-    if db_get_landmark(landmark_id) is None:
-        raise HTTPException(status_code=404, detail="Landmark not found.")
-
-
 # ==========================================
-# FAVORITES ROUTES (each user only sees and changes their own)
+# FAVORITE ROUTES (each user sees only their own)
 # ==========================================
 @app.get("/favorites")
 def get_favorites(user=Depends(require_user)):
@@ -565,7 +519,8 @@ def get_favorites(user=Depends(require_user)):
 
 @app.post("/favorites/{landmark_id}", status_code=201)
 def add_favorite(landmark_id: int = Path(..., ge=1), user=Depends(require_user)):
-    landmark_must_exist(landmark_id)
+    if db_get_landmark(landmark_id) is None:
+        raise HTTPException(status_code=404, detail="Landmark not found.")
     return db_add_favorite(user["id"], landmark_id)
 
 
@@ -577,7 +532,7 @@ def remove_favorite(landmark_id: int = Path(..., ge=1), user=Depends(require_use
 
 
 # ==========================================
-# TRIPS ROUTES (each user only sees and changes their own)
+# TRIP ROUTES (saved budget estimates, each user sees only their own)
 # ==========================================
 @app.get("/trips")
 def get_trips(user=Depends(require_user)):
@@ -586,36 +541,16 @@ def get_trips(user=Depends(require_user)):
 
 
 @app.post("/trips", status_code=201)
-def save_trip(trip: TripCreate, user=Depends(require_user)):
-    landmark_must_exist(trip.landmark_id)
-    return db_add_trip(user["id"], trip.model_dump())
+def create_trip(trip: TripCreate, user=Depends(require_user)):
+    if db_get_landmark(trip.landmark_id) is None:
+        raise HTTPException(status_code=404, detail="Landmark not found.")
+    data = trip.model_dump()
+    data["user_id"] = user["id"]  # the user comes from the login token, not from the request body
+    return db_add_trip(data)
 
 
 @app.delete("/trips/{trip_id}")
-def remove_trip(trip_id: int = Path(..., ge=1), user=Depends(require_user)):
+def delete_trip(trip_id: int = Path(..., ge=1), user=Depends(require_user)):
     if not db_delete_trip(user["id"], trip_id):
         raise HTTPException(status_code=404, detail="Trip not found.")
     return {"message": "Trip deleted.", "id": trip_id}
-
-
-# ==========================================
-# REVIEWS ROUTES (any logged-in user can read, each user writes their own)
-# ==========================================
-@app.get("/landmarks/{landmark_id}/reviews", dependencies=[Depends(require_user)])
-def get_reviews(landmark_id: int = Path(..., ge=1)):
-    landmark_must_exist(landmark_id)
-    reviews = db_get_reviews(landmark_id)
-    return {"count": len(reviews), "reviews": reviews}
-
-
-@app.post("/landmarks/{landmark_id}/reviews", status_code=201)
-def add_review(review: ReviewCreate, landmark_id: int = Path(..., ge=1), user=Depends(require_user)):
-    landmark_must_exist(landmark_id)
-    return db_add_review(user["id"], landmark_id, review.rating, review.comment)
-
-
-@app.delete("/reviews/{review_id}")
-def remove_review(review_id: int = Path(..., ge=1), user=Depends(require_user)):
-    if not db_delete_review(review_id, user["id"], role_name(user) == "admin"):
-        raise HTTPException(status_code=404, detail="Review not found.")
-    return {"message": "Review deleted.", "id": review_id}
