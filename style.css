@@ -436,3 +436,11 @@ dialog p { color: var(--ink-2); }
 fieldset.form-group > legend { float: left; width: 100%; }
 fieldset.form-group > legend + * { clear: both; }
 .pair label { display: block; margin-bottom: 8px; font-weight: 600; }
+
+/* ---------- Currency picker ---------- */
+.cur { margin-left: auto; height: 38px; width: 210px; padding: 0 28px 0 10px; font-size: .88rem; font-weight: 500; }
+.cur + .user { margin-left: 0; }
+@media (max-width: 760px) {
+    .cur { width: 130px; }
+    .menu-btn { margin-left: 0; }
+}
