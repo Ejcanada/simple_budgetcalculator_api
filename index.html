@@ -1,47 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Heritage Travels - Home</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Display&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<title>Heritage Travels | Landmark budgets</title>
 </head>
-<body>
-    <!-- Top Navigation -->
-    <nav class="navbar">
-        <div class="logo">
-            <span class="logo-icon">🗺</span>
-            <strong>Heritage Travels</strong>
-        </div>
-        <ul class="nav-links">
-            <li><a href="index.html">Home</a></li>
-            <li><a href="calculator.html">Calculator</a></li>
-            <li><a href="#">About</a></li>
-        </ul>
-    </nav>
+<body data-page="home">
+<header class="site-header" id="siteHeader"></header>
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <h1>What does it cost to stand where history happened?</h1>
+        <p class="hero-lede">Pick a landmark, set your days and travelers, and get a clear budget for the hotel, food, transport and entry.</p>
+        <form class="search" id="heroForm" role="search">
+          <div class="field">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <input id="heroInput" type="text" placeholder="Country, for example Italy" aria-label="Country">
+          </div>
+          <button class="btn btn-primary" type="submit">Estimate a budget</button>
+        </form>
+        <p class="hero-stat" id="heroStat" aria-live="polite"></p>
+      </div>
+      <figure class="arch">
+        <div class="arch-frame"><img src="images/colosseum.jpg" alt="The Colosseum in Rome"></div>
+        <figcaption><strong>Colosseum, Rome</strong><span>Entry 16 EUR. Hotel 150 EUR a night.</span></figcaption>
+      </figure>
+    </div>
+  </section>
 
-    <!-- Hero Section -->
-    <header class="hero">
-        <div class="hero-content">
-            <h1>Plan Your Next Country<br>With Real Price Budget Estimator</h1>
-            <p>Accurate, verified travel cost estimates and details for UNESCO World Heritage Wonders.</p>
-            
-            <div class="search-bar">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="searchInput" placeholder="where are you traveling? (e.g. Philippines, Japan, Italy)">
-                <button id="heroCalculateBtn">Calculate Cost ➔</button>
-            </div>
+  <section class="section" id="landmarks">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Landmarks <span class="muted" id="count" style="font-size:1rem;font-family:var(--font-ui)"></span></h2>
+        <div class="filter">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+          <input id="filter" type="search" placeholder="Search by name or place" aria-label="Search landmarks">
         </div>
-    </header>
-
-    <!-- Ipapakita pa rin natin ang lahat ng landmarks dito bilang gallery -->
-    <main class="container">
-        <h2 style="text-align: center; margin-bottom: 20px; color: #264653;">Explore All Landmarks</h2>
-        <div id="resultsGrid" class="grid">
-            <!-- JavaScript will inject all landmark cards here -->
-        </div>
-    </main>
-
-    <script src="app.js"></script>
+      </div>
+      <div class="tabs" id="tabs" role="group" aria-label="Region"></div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </section>
+</main>
+<footer class="site-footer" id="siteFooter"></footer>
+<script src="app.js"></script>
 </body>
 </html>
