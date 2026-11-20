@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Display&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<title>Budget matcher | Heritage Travels</title>
+</head>
+<body data-page="matcher">
+<header class="site-header" id="siteHeader"></header>
+<main>
+  <div class="wrap">
+    <div class="page-head">
+      <h1>Where does your budget take you?</h1>
+      <p>Enter what you can spend in total. We estimate every landmark for your trip and show the ones that fit.</p>
+    </div>
+    <div class="match">
+      <form class="match-form" id="matchForm" novalidate>
+        <div class="form-group">
+          <label for="budget">Total budget</label>
+          <div class="money-field">
+            <input id="budget" type="number" min="1" inputmode="decimal" placeholder="150000" autocomplete="off">
+            <span id="budgetCur" aria-hidden="true"></span>
+          </div>
+          <p class="hint">Prices on this site show in your chosen currency. Change it from the top bar.</p>
+        </div>
+        <div class="form-group">
+          <div class="pair">
+            <div>
+              <label for="days">Days</label>
+              <div class="stepper">
+                <button type="button" data-target="days" data-step="-1" aria-label="One day fewer">&minus;</button>
+                <input id="days" type="number" value="7" min="1" max="365" inputmode="numeric">
+                <button type="button" data-target="days" data-step="1" aria-label="One day more">+</button>
+              </div>
+            </div>
+            <div>
+              <label for="travelers">Travelers</label>
+              <div class="stepper">
+                <button type="button" data-target="travelers" data-step="-1" aria-label="One traveler fewer">&minus;</button>
+                <input id="travelers" type="number" value="2" min="1" max="100" inputmode="numeric">
+                <button type="button" data-target="travelers" data-step="1" aria-label="One traveler more">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <fieldset class="form-group">
+          <legend>Travel style</legend>
+          <div class="segment">
+            <label><input type="radio" name="style" value="budget"><span>Backpacker<small>Hostels, street food</small></span></label>
+            <label><input type="radio" name="style" value="standard" checked><span>Standard<small>Hotels, restaurants</small></span></label>
+            <label><input type="radio" name="style" value="luxury"><span>Luxury<small>Top hotels, private</small></span></label>
+          </div>
+          <p class="hint style-desc" id="styleDesc" aria-live="polite"></p>
+        </fieldset>
+        <button class="btn btn-primary match-submit" type="submit">Find matches</button>
+      </form>
+
+      <section aria-live="polite">
+        <div class="match-head" id="matchHead" hidden>
+          <div>
+            <h2 id="matchCount"></h2>
+            <p class="muted" id="matchNote"></p>
+          </div>
+          <div class="tabs sort" id="sort" role="group" aria-label="Sort by">
+            <button class="tab" type="button" data-sort="cost" aria-pressed="true">Lowest cost</button>
+            <button class="tab" type="button" data-sort="fit" aria-pressed="false">Uses most of my budget</button>
+          </div>
+        </div>
+        <div class="grid match-grid" id="results"></div>
+      </section>
+    </div>
+  </div>
+</main>
+<footer class="site-footer" id="siteFooter"></footer>
+<script src="app.js"></script>
+</body>
+</html>
