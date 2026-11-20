@@ -144,7 +144,7 @@ def db_get_user_by_login(login_name):
 
 def db_get_user_by_id(user_id):
     result = run(
-        get_db().table("users").select("id, full_name, email, is_active, role:roles(role)").eq("id", user_id)
+        get_db().table("users").select("id, full_name, email, is_active, home_currency, role:roles(role)").eq("id", user_id)
     ).data
     if len(result) == 0:
         return None
@@ -317,6 +317,12 @@ class TripCreate(BaseModel):
     currency: str = Field(pattern=r"^[A-Z]{3}$")
 
 
+class CurrencyData(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+
+
 class LandmarkCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -440,12 +446,25 @@ def login(data: LoginData):
         "username": user.get("username"),
         "full_name": user["full_name"],
         "role": role_name(user),
+        "home_currency": user.get("home_currency"),
     }
 
 
 @app.get("/auth/me")
 def who_am_i(user=Depends(require_user)):
-    return {"full_name": user["full_name"], "email": user["email"], "role": role_name(user)}
+    return {
+        "full_name": user["full_name"],
+        "email": user["email"],
+        "role": role_name(user),
+        "home_currency": user.get("home_currency"),
+    }
+
+
+@app.put("/auth/currency")
+def set_home_currency(data: CurrencyData, user=Depends(require_user)):
+    """Saves the currency the user wants to see prices in."""
+    db_update_user(user["id"], {"home_currency": data.currency})
+    return {"home_currency": data.currency}
 
 
 # ==========================================
