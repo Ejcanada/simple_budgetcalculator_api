@@ -237,7 +237,8 @@ const NAV = [
     { page: "home", href: "index.html", label: "Landmarks" },
     { page: "calculator", href: "calculator.html", label: "Budget estimator" },
     { page: "trips", href: "my-trips.html", label: "My trips" },
-    { page: "saved", href: "saved.html", label: "Saved places" }
+    { page: "saved", href: "saved.html", label: "Saved places" },
+    { page: "matcher", href: "matcher.html", label: "Budget matcher" }
 ];
 
 function buildHeader() {
@@ -801,6 +802,116 @@ function initSaved() {
 }
 
 // ==========================================
+// PAGE: BUDGET MATCHER
+// The visitor enters a total budget. We estimate every landmark with the same
+// math as the estimator and keep the ones that fit.
+// ==========================================
+function initMatcher() {
+    const budgetInput = $("#budget");
+    const daysInput = $("#days");
+    const travelersInput = $("#travelers");
+    const results = $("#results");
+    const head = $("#matchHead");
+    const sortBox = $("#sort");
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, parseInt(value, 10) || min));
+    const currentStyle = () => (document.querySelector('input[name="style"]:checked') || {}).value || "standard";
+    let landmarks = [];
+    let sortBy = "cost";
+    let shownCurrency = homeCurrency;
+
+    function showCurrency() {
+        $("#budgetCur").textContent = homeCurrency;
+    }
+
+    function run() {
+        $("#styleDesc").textContent = STYLES[currentStyle()].desc;
+        if (!landmarks.length) return;
+        const budget = parseFloat(budgetInput.value);
+        if (!budget || budget <= 0) {
+            head.hidden = true;
+            results.replaceChildren(h("div", { class: "ticket-empty" },
+                h("h2", null, "Enter your budget."),
+                h("p", null, "Type how much you can spend in total. Matching landmarks show here.")));
+            return;
+        }
+        const days = clamp(daysInput.value, 1, 365);
+        const travelers = clamp(travelersInput.value, 1, 100);
+        const styleKey = currentStyle();
+
+        const all = landmarks.map((site) => {
+            const est = estimate(site, days, travelers, STYLES[styleKey].mult);
+            const total = convert(est.total, site.currency, homeCurrency);
+            return { site: site, total: total, spare: budget - total };
+        });
+        const fits = all.filter((m) => m.spare >= 0);
+        fits.sort(sortBy === "cost" ? (a, b) => a.total - b.total : (a, b) => a.spare - b.spare);
+
+        head.hidden = false;
+        $("#matchCount").textContent = fits.length === 0 ? "No landmarks fit" : plural(fits.length, "landmark fits", "landmarks fit") + " your budget";
+        $("#matchNote").textContent = plural(days, "day", "days") + ", " + plural(travelers, "traveler", "travelers") + ", " + STYLES[styleKey].label + " style";
+        sortBox.hidden = fits.length < 2;
+
+        if (fits.length === 0) {
+            const cheapest = all.slice().sort((a, b) => a.total - b.total)[0];
+            results.replaceChildren(h("div", { class: "state" },
+                h("h2", null, "Nothing fits this budget yet."),
+                h("p", null, "The lowest estimate is " + cheapest.site.title + " at " + formatMoney(cheapest.total, homeCurrency) + ". Try a bigger budget, fewer days or travelers, or the Backpacker style."),
+                styleKey !== "budget" ? h("button", { class: "btn btn-quiet", type: "button", onclick: () => { $('input[name="style"][value="budget"]').checked = true; run(); } }, "Try Backpacker style") : null));
+            return;
+        }
+
+        const cards = fits.map((m) => {
+            const card = placeCard(m.site);
+            const link = card.querySelector(".place-link");
+            const url = "calculator.html?landmark=" + m.site.id + "&days=" + days + "&travelers=" + travelers + "&style=" + styleKey;
+            link.setAttribute("href", url);
+            link.textContent = "See the breakdown";
+            card.querySelector(".place-body").insertBefore(h("div", { class: "match-total" },
+                h("div", null, h("span", { class: "match-label" }, "Estimated total"), h("strong", null, formatMoney(m.total, homeCurrency))),
+                h("div", { class: "match-spare" }, formatMoney(m.spare, homeCurrency) + " to spare")), link);
+            return card;
+        });
+        results.replaceChildren(...cards);
+    }
+
+    document.querySelectorAll(".stepper button").forEach((button) => {
+        button.addEventListener("click", () => {
+            const input = $("#" + button.dataset.target);
+            input.value = clamp(parseInt(input.value, 10) + parseInt(button.dataset.step, 10), 1, parseInt(input.max, 10));
+            run();
+        });
+    });
+    [daysInput, travelersInput].forEach((input) => {
+        input.addEventListener("input", run);
+        input.addEventListener("change", () => { input.value = clamp(input.value, 1, parseInt(input.max, 10)); run(); });
+    });
+    budgetInput.addEventListener("input", run);
+    $("#matchForm").addEventListener("submit", (event) => { event.preventDefault(); run(); });
+    document.querySelectorAll('input[name="style"]').forEach((radio) => radio.addEventListener("change", run));
+    sortBox.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
+        sortBy = button.dataset.sort;
+        sortBox.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+        run();
+    }));
+
+    // When the currency changes, the typed budget is converted so it keeps the same value
+    currencyListeners.push(() => {
+        const value = parseFloat(budgetInput.value);
+        if (value > 0 && shownCurrency !== homeCurrency) {
+            budgetInput.value = String(Math.round(convert(value, shownCurrency, homeCurrency)));
+        }
+        shownCurrency = homeCurrency;
+        showCurrency();
+        run();
+    });
+
+    showCurrency();
+    results.replaceChildren(h("div", { class: "skel", style: "height:220px;border-radius:12px", "aria-hidden": "true" }));
+    Promise.all([loadLandmarks(), loadFavorites()]).then(([list]) => { landmarks = list; run(); })
+        .catch((error) => showError(results, error.message, () => window.location.reload()));
+}
+
+// ==========================================
 // START
 // ==========================================
 async function start() {
@@ -825,5 +936,6 @@ async function start() {
     else if (page === "calculator") initCalculator();
     else if (page === "trips") initTrips();
     else if (page === "saved") initSaved();
+    else if (page === "matcher") initMatcher();
 }
 if (token) start();
