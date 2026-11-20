@@ -1,7 +1,9 @@
+import hashlib
+import hmac
 import os
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 import bcrypt
 import jwt
@@ -37,8 +39,8 @@ app.add_middleware(
 # SETTINGS
 # ==========================================
 TOKEN_MINUTES = 60        # how long a login lasts
-MAX_FAILED_LOGINS = 5     # wrong passwords before the account is locked
-LOCK_MINUTES = 15         # how long the account stays locked
+MAX_FAILED_LOGINS = 10    # wrong passwords before the account is locked
+LOCK_MINUTES = 5          # how long the account stays locked
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
@@ -69,6 +71,7 @@ def run(query, duplicate_message="A landmark with this title already exists."):
     except HTTPException:
         raise
     except Exception as error:
+        print("DATABASE ERROR:", repr(error))  # visible in Vercel logs only
         code = getattr(error, "code", None)
         if code == "23505":  # the value must be unique but it already exists
             raise HTTPException(status_code=409, detail=duplicate_message)
@@ -120,72 +123,6 @@ def db_delete_landmark(landmark_id):
     return len(result) > 0
 
 
-# ----- favorites table (many-to-many: users <-> landmarks) -----
-def db_get_favorites(user_id):
-    return run(
-        get_db().table("favorites").select("id, created_at, landmark:landmarks(*)").eq("user_id", user_id).order("id")
-    ).data
-
-
-def db_add_favorite(user_id, landmark_id):
-    new_favorite = {"user_id": user_id, "landmark_id": landmark_id}
-    return run(
-        get_db().table("favorites").insert(new_favorite), duplicate_message="You already saved this landmark."
-    ).data[0]
-
-
-def db_delete_favorite(user_id, landmark_id):
-    # user_id is in the filter, so a user can only delete their own favorites
-    result = run(get_db().table("favorites").delete().eq("user_id", user_id).eq("landmark_id", landmark_id)).data
-    return len(result) > 0
-
-
-# ----- trips table (saved budget estimates) -----
-def db_get_trips(user_id):
-    return run(
-        get_db()
-        .table("trips")
-        .select("id, nights, travelers, total, currency, created_at, landmark:landmarks(id, title, country)")
-        .eq("user_id", user_id)
-        .order("id", desc=True)
-    ).data
-
-
-def db_add_trip(user_id, data):
-    new_trip = dict(data, user_id=user_id)
-    return run(get_db().table("trips").insert(new_trip)).data[0]
-
-
-def db_delete_trip(user_id, trip_id):
-    result = run(get_db().table("trips").delete().eq("id", trip_id).eq("user_id", user_id)).data
-    return len(result) > 0
-
-
-# ----- reviews table (rating 1 to 5 and a comment) -----
-def db_get_reviews(landmark_id):
-    return run(
-        get_db()
-        .table("reviews")
-        .select("id, rating, comment, created_at, user:users(full_name)")
-        .eq("landmark_id", landmark_id)
-        .order("id", desc=True)
-    ).data
-
-
-def db_add_review(user_id, landmark_id, rating, comment):
-    new_review = {"user_id": user_id, "landmark_id": landmark_id, "rating": rating, "comment": comment}
-    return run(
-        get_db().table("reviews").insert(new_review), duplicate_message="You already reviewed this landmark."
-    ).data[0]
-
-
-def db_delete_review(review_id, user_id, is_admin):
-    query = get_db().table("reviews").delete().eq("id", review_id)
-    if not is_admin:  # normal users can only delete their own reviews
-        query = query.eq("user_id", user_id)
-    return len(run(query).data) > 0
-
-
 # ----- users table (each user has a role_id that points to the roles table) -----
 def db_get_user_by_email(email):
     result = run(get_db().table("users").select("*, role:roles(role)").eq("email", email)).data
@@ -194,9 +131,20 @@ def db_get_user_by_email(email):
     return result[0]
 
 
+def db_get_user_by_login(login_name):
+    """The login box accepts an email or a username (not case sensitive)."""
+    user = db_get_user_by_email(login_name)
+    if user is not None:
+        return user
+    result = run(get_db().table("users").select("*, role:roles(role)").eq("username", login_name)).data
+    if len(result) == 0:
+        return None
+    return result[0]
+
+
 def db_get_user_by_id(user_id):
     result = run(
-        get_db().table("users").select("id, full_name, email, is_active, role:roles(role)").eq("id", user_id)
+        get_db().table("users").select("id, full_name, email, is_active, home_currency, role:roles(role)").eq("id", user_id)
     ).data
     if len(result) == 0:
         return None
@@ -212,6 +160,37 @@ def db_add_user(full_name, email, password_hash):
 
 def db_update_user(user_id, changes):
     run(get_db().table("users").update(changes).eq("id", user_id))
+
+
+# ----- favorites table (user_id -> users.id, landmark_id -> landmarks.id) -----
+def db_get_favorites(user_id):
+    query = get_db().table("favorites").select("id, created_at, landmark:landmarks(*)").eq("user_id", user_id)
+    return run(query.order("id")).data
+
+
+def db_add_favorite(user_id, landmark_id):
+    new_favorite = {"user_id": user_id, "landmark_id": landmark_id}
+    return run(get_db().table("favorites").insert(new_favorite), duplicate_message="Already in your favorites.").data[0]
+
+
+def db_delete_favorite(user_id, landmark_id):
+    query = get_db().table("favorites").delete().eq("user_id", user_id).eq("landmark_id", landmark_id)
+    return len(run(query).data) > 0
+
+
+# ----- trips table (saved budget estimates) -----
+def db_get_trips(user_id):
+    query = get_db().table("trips").select("*, landmark:landmarks(title, country)").eq("user_id", user_id)
+    return run(query.order("id", desc=True)).data
+
+
+def db_add_trip(data):
+    return run(get_db().table("trips").insert(data)).data[0]
+
+
+def db_delete_trip(user_id, trip_id):
+    query = get_db().table("trips").delete().eq("id", trip_id).eq("user_id", user_id)
+    return len(run(query).data) > 0
 
 
 # ==========================================
@@ -246,9 +225,14 @@ def role_name(user):
 # ==========================================
 def get_jwt_secret():
     secret = os.getenv("JWT_SECRET")
-    if not secret or len(secret) < 32:
-        raise HTTPException(status_code=503, detail="Login is not configured.")
-    return secret
+    if secret and len(secret) >= 32:
+        return secret
+    # JWT_SECRET is missing or too short. Instead of blocking every login, derive a signing
+    # secret from the database secret key (it is already secret and is never sent to the browser).
+    db_key = os.getenv("SUPABASE_SERVICE_KEY")
+    if db_key:
+        return hmac.new(db_key.encode("utf-8"), b"heritage-travels-login-token", hashlib.sha256).hexdigest()
+    raise HTTPException(status_code=503, detail="Login is not configured.")
 
 
 def make_token(user_id):
@@ -290,7 +274,7 @@ def require_admin(user=Depends(require_user)):
 # DATA MODELS (validation rules)
 # ==========================================
 class RegisterData(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     full_name: str = Field(min_length=1, max_length=100)
     email: str = Field(max_length=254, pattern=EMAIL_PATTERN)
@@ -303,22 +287,40 @@ class RegisterData(BaseModel):
 
     @field_validator("password")
     @classmethod
-    def check_password_rules(cls, value):
+    def check_password_length(cls, value):
         if len(value.encode("utf-8")) > 72:
             raise ValueError("password is too long")
         return value
 
 
 class LoginData(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
-    email: str = Field(max_length=254, pattern=EMAIL_PATTERN)
-    password: str = Field(min_length=1, max_length=72)
+    # "email" can hold an email or a username (the field keeps this name for the login page)
+    email: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=200)
 
     @field_validator("email")
     @classmethod
     def make_email_lowercase(cls, value):
         return value.lower()
+
+
+class TripCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    landmark_id: int = Field(ge=1)
+    travel_style: Literal["budget", "standard", "luxury"]
+    days: int = Field(ge=1, le=365)
+    travelers: int = Field(ge=1, le=100)
+    total_cost: float = Field(ge=0, le=1000000000)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+
+
+class CurrencyData(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
 
 
 class LandmarkCreate(BaseModel):
@@ -379,23 +381,6 @@ class LandmarkUpdate(BaseModel):
         return value
 
 
-class TripCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    landmark_id: int = Field(ge=1)
-    nights: int = Field(gt=0, le=365)
-    travelers: int = Field(gt=0, le=1000)
-    total: float = Field(ge=0, le=1000000000000)
-    currency: Optional[str] = Field(default=None, pattern=r"^[A-Z]{3}$")
-
-
-class ReviewCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    rating: int = Field(ge=1, le=5)
-    comment: Optional[str] = Field(default=None, max_length=500)
-
-
 # ==========================================
 # ANY OTHER ERROR (no secrets or stack trace is shown)
 # ==========================================
@@ -419,7 +404,7 @@ def register(data: RegisterData):
 
 @app.post("/auth/login")
 def login(data: LoginData):
-    user = db_get_user_by_email(data.email)
+    user = db_get_user_by_login(data.email)
     now = datetime.now(timezone.utc)
 
     # 1. Is the account locked because of too many wrong passwords?
@@ -458,14 +443,28 @@ def login(data: LoginData):
         "token_type": "bearer",
         "expires_in_minutes": TOKEN_MINUTES,
         "email": user["email"],
+        "username": user.get("username"),
         "full_name": user["full_name"],
         "role": role_name(user),
+        "home_currency": user.get("home_currency"),
     }
 
 
 @app.get("/auth/me")
 def who_am_i(user=Depends(require_user)):
-    return {"full_name": user["full_name"], "email": user["email"], "role": role_name(user)}
+    return {
+        "full_name": user["full_name"],
+        "email": user["email"],
+        "role": role_name(user),
+        "home_currency": user.get("home_currency"),
+    }
+
+
+@app.put("/auth/currency")
+def set_home_currency(data: CurrencyData, user=Depends(require_user)):
+    """Saves the currency the user wants to see prices in."""
+    db_update_user(user["id"], {"home_currency": data.currency})
+    return {"home_currency": data.currency}
 
 
 # ==========================================
@@ -477,7 +476,7 @@ def home():
     return {
         "message": "Welcome to the World Heritage Sites API!",
         "count": result.count,
-        "endpoints": ["/health", "/auth/login", "/auth/register", "/landmarks", "/landmarks/{id}", "/landmarks/search?q=", "/favorites", "/trips", "/landmarks/{id}/reviews"],
+        "endpoints": ["/health", "/auth/login", "/auth/register", "/landmarks", "/landmarks/{id}", "/landmarks/search?q=", "/favorites", "/trips"],
     }
 
 
@@ -523,7 +522,7 @@ def get_landmark(landmark_id: int = Path(..., ge=1)):
 # ==========================================
 # LANDMARK ROUTES - CREATE, UPDATE, DELETE (admin only)
 # ==========================================
-@app.post("/landmarks", status_code=201, dependencies=[Depends(require_admin)])
+@app.post("/landmarks", status_code=201)
 def create_landmark(landmark: LandmarkCreate, admin=Depends(require_admin)):
     data = landmark.model_dump()
     data["created_by"] = admin["id"]  # remember which admin added this landmark
@@ -549,13 +548,8 @@ def delete_landmark(landmark_id: int = Path(..., ge=1)):
     return {"message": "Landmark deleted.", "id": landmark_id}
 
 
-def landmark_must_exist(landmark_id):
-    if db_get_landmark(landmark_id) is None:
-        raise HTTPException(status_code=404, detail="Landmark not found.")
-
-
 # ==========================================
-# FAVORITES ROUTES (each user only sees and changes their own)
+# FAVORITE ROUTES (each user sees only their own)
 # ==========================================
 @app.get("/favorites")
 def get_favorites(user=Depends(require_user)):
@@ -565,7 +559,8 @@ def get_favorites(user=Depends(require_user)):
 
 @app.post("/favorites/{landmark_id}", status_code=201)
 def add_favorite(landmark_id: int = Path(..., ge=1), user=Depends(require_user)):
-    landmark_must_exist(landmark_id)
+    if db_get_landmark(landmark_id) is None:
+        raise HTTPException(status_code=404, detail="Landmark not found.")
     return db_add_favorite(user["id"], landmark_id)
 
 
@@ -577,7 +572,7 @@ def remove_favorite(landmark_id: int = Path(..., ge=1), user=Depends(require_use
 
 
 # ==========================================
-# TRIPS ROUTES (each user only sees and changes their own)
+# TRIP ROUTES (saved budget estimates, each user sees only their own)
 # ==========================================
 @app.get("/trips")
 def get_trips(user=Depends(require_user)):
@@ -586,36 +581,16 @@ def get_trips(user=Depends(require_user)):
 
 
 @app.post("/trips", status_code=201)
-def save_trip(trip: TripCreate, user=Depends(require_user)):
-    landmark_must_exist(trip.landmark_id)
-    return db_add_trip(user["id"], trip.model_dump())
+def create_trip(trip: TripCreate, user=Depends(require_user)):
+    if db_get_landmark(trip.landmark_id) is None:
+        raise HTTPException(status_code=404, detail="Landmark not found.")
+    data = trip.model_dump()
+    data["user_id"] = user["id"]  # the user comes from the login token, not from the request body
+    return db_add_trip(data)
 
 
 @app.delete("/trips/{trip_id}")
-def remove_trip(trip_id: int = Path(..., ge=1), user=Depends(require_user)):
+def delete_trip(trip_id: int = Path(..., ge=1), user=Depends(require_user)):
     if not db_delete_trip(user["id"], trip_id):
         raise HTTPException(status_code=404, detail="Trip not found.")
     return {"message": "Trip deleted.", "id": trip_id}
-
-
-# ==========================================
-# REVIEWS ROUTES (any logged-in user can read, each user writes their own)
-# ==========================================
-@app.get("/landmarks/{landmark_id}/reviews", dependencies=[Depends(require_user)])
-def get_reviews(landmark_id: int = Path(..., ge=1)):
-    landmark_must_exist(landmark_id)
-    reviews = db_get_reviews(landmark_id)
-    return {"count": len(reviews), "reviews": reviews}
-
-
-@app.post("/landmarks/{landmark_id}/reviews", status_code=201)
-def add_review(review: ReviewCreate, landmark_id: int = Path(..., ge=1), user=Depends(require_user)):
-    landmark_must_exist(landmark_id)
-    return db_add_review(user["id"], landmark_id, review.rating, review.comment)
-
-
-@app.delete("/reviews/{review_id}")
-def remove_review(review_id: int = Path(..., ge=1), user=Depends(require_user)):
-    if not db_delete_review(review_id, user["id"], role_name(user) == "admin"):
-        raise HTTPException(status_code=404, detail="Review not found.")
-    return {"message": "Review deleted.", "id": review_id}
