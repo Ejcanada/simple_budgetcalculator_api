@@ -448,11 +448,44 @@ function initHome() {
 
     filter.addEventListener("input", () => { state.query = filter.value; render(); });
 
-    // Hero caption shows the Colosseum prices in the visitor's currency
+    // Hero photo changes every few seconds. The caption shows that landmark's prices in the visitor's currency.
+    let slides = [];
+    let slideIndex = 0;
+    let slideTimer = null;
     function renderCaption() {
-        const caption = $("#heroCaption");
-        const site = landmarks.find((s) => /colosseum/i.test(s.title));
-        caption.textContent = site ? "Entry " + formatFee(site) + ". Hotel " + formatMoney(site.hotel_rate, site.currency) + " a night." : "";
+        const site = slides[slideIndex];
+        if (!site) return;
+        $("#heroName").textContent = [site.title, site.city].filter(Boolean).join(", ");
+        $("#heroCaption").textContent = "Entry " + (formatFee(site) === "Free" ? "is free" : formatFee(site)) + ". Hotel " + formatMoney(site.hotel_rate, site.currency) + " a night.";
+    }
+    function showSlide(index) {
+        const site = slides[index];
+        const frame = $("#heroFrame");
+        const img = h("img", { class: "slide", src: safeImage(site.icon), alt: site.title });
+        img.addEventListener("load", () => {
+            const old = Array.from(frame.querySelectorAll("img"));
+            frame.append(img);
+            requestAnimationFrame(() => requestAnimationFrame(() => img.classList.add("in")));
+            slideIndex = index;
+            renderCaption();
+            setTimeout(() => old.forEach((o) => o.remove()), 1300);
+        });
+        img.addEventListener("error", () => img.remove());
+    }
+    function startSlides() {
+        const withPhoto = landmarks.filter((s) => safeImage(s.icon));
+        const first = withPhoto.find((s) => /colosseum/i.test(s.title)) || withPhoto[0];
+        if (!first) return;
+        const others = withPhoto.filter((s) => s !== first).sort(() => Math.random() - 0.5).slice(0, 7);
+        slides = [first].concat(others);
+        slideIndex = 0;
+        renderCaption();
+        if (slides.length < 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const frame = $("#heroFrame");
+        let paused = false;
+        frame.addEventListener("mouseenter", () => { paused = true; });
+        frame.addEventListener("mouseleave", () => { paused = false; });
+        slideTimer = setInterval(() => { if (!paused && !document.hidden) showSlide((slideIndex + 1) % slides.length); }, 5000);
     }
     currencyListeners.push(() => { if (landmarks.length) { render(); renderCaption(); } });
 
@@ -469,7 +502,7 @@ function initHome() {
         heroStat.textContent = plural(landmarks.length, "landmark", "landmarks") + " in " + plural(countries, "country", "countries") + ".";
         renderTabs();
         render();
-        renderCaption();
+        startSlides();
     }
     load();
 }
