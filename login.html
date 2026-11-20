@@ -148,6 +148,7 @@ form.addEventListener("submit", async (e) => {
             localStorage.setItem("email", data.username || data.email || email);
             localStorage.setItem("name", data.full_name || "");
             localStorage.setItem("role", data.role || "user");
+            if (data.home_currency) { localStorage.setItem("currency", data.home_currency); } else { localStorage.removeItem("currency"); }
         } catch (err) {
             showMessage("Your browser blocked saving the login. Allow site storage and try again.", "error");
             return;
