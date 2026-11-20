@@ -444,3 +444,8 @@ fieldset.form-group > legend + * { clear: both; }
     .cur { width: 130px; }
     .menu-btn { margin-left: 0; }
 }
+
+/* ---------- Style description and cost details ---------- */
+.style-desc { margin-top: 12px; padding: 12px 14px; border-left: 3px solid var(--verd); background: var(--verd-wash); border-radius: 0 var(--radius) var(--radius) 0; color: var(--ink); font-size: .92rem; line-height: 1.5; }
+.lines li { flex-wrap: wrap; }
+.lines .detail { flex: 0 0 calc(100% - 16px); margin: 0 0 6px 16px; font-size: .82rem; line-height: 1.45; color: var(--ink-2); }
