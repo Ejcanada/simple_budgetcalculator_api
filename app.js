@@ -67,7 +67,7 @@ function toast(message, type) {
 // ==========================================
 const session = {
     get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
-    clear() { ["token", "email", "name", "role"].forEach((k) => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }); }
+    clear() { ["token", "email", "name", "role", "currency"].forEach((k) => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }); }
 };
 
 function logout() {
@@ -111,8 +111,104 @@ function parseFee(feeString) {
     return match ? parseFloat(match[0]) : 0;
 }
 
-function formatMoney(amount, currency) {
-    return Math.round(amount).toLocaleString() + " " + (currency || "");
+// ==========================================
+// CURRENCY: prices show in the visitor's own currency
+// ==========================================
+const CURRENCIES = {
+    USD: "US dollar", EUR: "Euro", GBP: "British pound", JPY: "Japanese yen", AUD: "Australian dollar", CAD: "Canadian dollar",
+    CNY: "Chinese yuan", PHP: "Philippine peso", INR: "Indian rupee", KRW: "South Korean won", SGD: "Singapore dollar",
+    HKD: "Hong Kong dollar", NZD: "New Zealand dollar", CHF: "Swiss franc", SEK: "Swedish krona", NOK: "Norwegian krone",
+    DKK: "Danish krone", PLN: "Polish zloty", CZK: "Czech koruna", HUF: "Hungarian forint", RON: "Romanian leu",
+    TRY: "Turkish lira", ZAR: "South African rand", NGN: "Nigerian naira", KES: "Kenyan shilling", EGP: "Egyptian pound",
+    MAD: "Moroccan dirham", AED: "UAE dirham", SAR: "Saudi riyal", QAR: "Qatari riyal", KWD: "Kuwaiti dinar", ILS: "Israeli shekel",
+    JOD: "Jordanian dinar", PKR: "Pakistani rupee", BDT: "Bangladeshi taka", LKR: "Sri Lankan rupee", NPR: "Nepalese rupee",
+    THB: "Thai baht", MYR: "Malaysian ringgit", IDR: "Indonesian rupiah", VND: "Vietnamese dong", KHR: "Cambodian riel",
+    BRL: "Brazilian real", ARS: "Argentine peso", MXN: "Mexican peso", COP: "Colombian peso", CLP: "Chilean peso",
+    PEN: "Peruvian sol", GTQ: "Guatemalan quetzal", ISK: "Icelandic krona", ZMW: "Zambian kwacha", TZS: "Tanzanian shilling"
+};
+
+// The country in the browser language (for example "en-PH") picks the starting currency
+const REGION_CURRENCY = {
+    US: "USD", PH: "PHP", GB: "GBP", JP: "JPY", AU: "AUD", CA: "CAD", CN: "CNY", IN: "INR", KR: "KRW", SG: "SGD", HK: "HKD",
+    NZ: "NZD", CH: "CHF", SE: "SEK", NO: "NOK", DK: "DKK", PL: "PLN", CZ: "CZK", HU: "HUF", RO: "RON", TR: "TRY", ZA: "ZAR",
+    NG: "NGN", KE: "KES", EG: "EGP", MA: "MAD", AE: "AED", SA: "SAR", QA: "QAR", KW: "KWD", IL: "ILS", JO: "JOD", PK: "PKR",
+    BD: "BDT", LK: "LKR", NP: "NPR", TH: "THB", MY: "MYR", ID: "IDR", VN: "VND", KH: "KHR", BR: "BRL", AR: "ARS", MX: "MXN",
+    CO: "COP", CL: "CLP", PE: "PEN", GT: "GTQ", IS: "ISK", ZM: "ZMW", TZ: "TZS",
+    DE: "EUR", FR: "EUR", ES: "EUR", IT: "EUR", NL: "EUR", BE: "EUR", AT: "EUR", PT: "EUR", IE: "EUR", FI: "EUR", GR: "EUR"
+};
+
+// Used only if the live rates cannot be loaded (units per 1 US dollar, approximate)
+const FALLBACK_RATES = {
+    USD: 1, EUR: .86, GBP: .75, JPY: 155, AUD: 1.52, CAD: 1.38, CNY: 7.2, PHP: 58, INR: 88, KRW: 1450, SGD: 1.3, HKD: 7.8,
+    NZD: 1.7, CHF: .8, SEK: 9.5, NOK: 10.2, DKK: 6.4, PLN: 3.7, CZK: 21, HUF: 340, RON: 4.4, TRY: 42, ZAR: 17.5, NGN: 1500,
+    KES: 129, EGP: 48, MAD: 9.3, AED: 3.67, SAR: 3.75, QAR: 3.64, KWD: .31, ILS: 3.3, JOD: .71, PKR: 280, BDT: 122, LKR: 300,
+    NPR: 140, THB: 33, MYR: 4.2, IDR: 16500, VND: 26300, KHR: 4020, BRL: 5.4, ARS: 1450, MXN: 18.5, COP: 4000, CLP: 940,
+    PEN: 3.4, GTQ: 7.7, ISK: 125, ZMW: 22, TZS: 2500
+};
+
+let rates = FALLBACK_RATES;
+let ratesAreLive = false;
+let homeCurrency = "USD";
+const currencyListeners = [];
+
+function detectCurrency() {
+    const languages = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || ""];
+    for (const language of languages) {
+        const region = (String(language).split("-")[1] || "").toUpperCase();
+        if (REGION_CURRENCY[region]) return REGION_CURRENCY[region];
+    }
+    return "USD";
+}
+
+// Live exchange rates (cached for 12 hours in the browser)
+async function loadRates() {
+    try {
+        const cached = JSON.parse(localStorage.getItem("rates") || "null");
+        if (cached && Date.now() - cached.time < 12 * 3600 * 1000) { rates = cached.rates; ratesAreLive = true; return; }
+    } catch (e) { /* ignore */ }
+    try {
+        const response = await fetch("https://open.er-api.com/v6/latest/USD");
+        const data = await response.json();
+        if (data.result === "success" && data.rates && data.rates.USD) {
+            rates = data.rates;
+            ratesAreLive = true;
+            try { localStorage.setItem("rates", JSON.stringify({ time: Date.now(), rates: rates })); } catch (e) { /* ignore */ }
+        }
+    } catch (e) { console.warn("Using built-in exchange rates:", e); }
+}
+
+function convert(amount, from, to) {
+    const a = rates[from] || FALLBACK_RATES[from];
+    const b = rates[to] || FALLBACK_RATES[to];
+    if (!a || !b || from === to) return amount;
+    return (amount / a) * b;
+}
+
+// Shows an amount that is in currency "from" as the visitor's own currency
+function formatMoney(amount, from) {
+    const value = convert(Number(amount) || 0, from || homeCurrency, homeCurrency);
+    try {
+        return new Intl.NumberFormat(undefined, { style: "currency", currency: homeCurrency, maximumFractionDigits: 0 }).format(value);
+    } catch (e) {
+        return Math.round(value).toLocaleString() + " " + homeCurrency;
+    }
+}
+
+// "16 EUR" -> the same fee in the visitor's currency, "Free" stays "Free"
+function formatFee(site) {
+    if (!site.entry_fee) return "";
+    if (/free/i.test(site.entry_fee) && parseFee(site.entry_fee) === 0) return "Free";
+    const code = (String(site.entry_fee).match(/\b[A-Z]{3}\b/) || [site.currency])[0];
+    return formatMoney(parseFee(site.entry_fee), code);
+}
+
+function setCurrency(code, save) {
+    homeCurrency = code;
+    try { localStorage.setItem("currency", code); } catch (e) { /* ignore */ }
+    if (save) api("/auth/currency", "PUT", { currency: code }).catch((e) => console.warn("Could not save currency:", e));
+    const select = $("#currency");
+    if (select) select.value = code;
+    currencyListeners.forEach((fn) => fn());
 }
 
 function formatYear(year) {
@@ -162,9 +258,18 @@ function buildHeader() {
         NAV.map((item) => h("a", { href: item.href, "aria-current": item.page === current ? "page" : null }, item.label)),
         h("button", { class: "btn-link nav-logout", type: "button", onclick: logout }, "Log out"));
 
+    const currencySelect = h("select", { class: "cur", id: "currency", "aria-label": "Show prices in" },
+        Object.keys(CURRENCIES).sort().map((code) => h("option", { value: code }, code + " - " + CURRENCIES[code])));
+    currencySelect.value = homeCurrency;
+    currencySelect.addEventListener("change", () => {
+        setCurrency(currencySelect.value, true);
+        toast("Prices now show in " + CURRENCIES[currencySelect.value] + ".");
+    });
+
     header.append(h("div", { class: "wrap" },
         h("a", { class: "brand", href: "index.html" }, icon("arch", 26), "Heritage Travels"),
         nav,
+        currencySelect,
         h("div", { class: "user" },
             session.get("role") === "admin" ? h("span", { class: "badge" }, "Admin") : null,
             h("span", { class: "avatar", "aria-hidden": "true" }, (name[0] || "?").toUpperCase()),
@@ -272,8 +377,8 @@ function placeCard(site, onChange) {
     if (site.visitor_rating) facts.append(h("li", null, icon("star", 14), site.visitor_rating));
     if (site.established_year !== null && site.established_year !== undefined) facts.append(h("li", null, formatYear(site.established_year)));
     if (site.entry_fee) {
-        const free = parseFee(site.entry_fee) === 0 && /free/i.test(site.entry_fee);
-        facts.append(h("li", null, free ? h("span", { class: "free" }, "Free entry") : "Entry " + site.entry_fee));
+        const fee = formatFee(site);
+        facts.append(h("li", null, fee === "Free" ? h("span", { class: "free" }, "Free entry") : "Entry " + fee));
     }
 
     const card = h("article", { class: "place" },
@@ -342,6 +447,14 @@ function initHome() {
 
     filter.addEventListener("input", () => { state.query = filter.value; render(); });
 
+    // Hero caption shows the Colosseum prices in the visitor's currency
+    function renderCaption() {
+        const caption = $("#heroCaption");
+        const site = landmarks.find((s) => /colosseum/i.test(s.title));
+        caption.textContent = site ? "Entry " + formatFee(site) + ". Hotel " + formatMoney(site.hotel_rate, site.currency) + " a night." : "";
+    }
+    currencyListeners.push(() => { if (landmarks.length) { render(); renderCaption(); } });
+
     async function load() {
         showSkeleton(grid, 6);
         try {
@@ -355,6 +468,7 @@ function initHome() {
         heroStat.textContent = plural(landmarks.length, "landmark", "landmarks") + " in " + plural(countries, "country", "countries") + ".";
         renderTabs();
         render();
+        renderCaption();
     }
     load();
 }
@@ -412,10 +526,11 @@ function initCalculator() {
         const list = landmarks.filter((s) => !country || s.country === country);
         landmarkSelect.replaceChildren(
             h("option", { value: "" }, list.length ? "Choose a landmark" : "No landmarks in this country"),
-            ...list.map((s) => h("option", { value: String(s.id) }, s.title + " (entry " + s.entry_fee + ")")));
+            ...list.map((s) => h("option", { value: String(s.id) }, s.title + " (entry " + formatFee(s) + ")")));
         if (list.some((s) => String(s.id) === keep)) landmarkSelect.value = keep;
     }
 
+    currencyListeners.push(() => { if (landmarks.length) { fillLandmarks(); render(); } });
     countrySelect.addEventListener("change", () => { fillLandmarks(); render(); });
     landmarkSelect.addEventListener("change", render);
 
@@ -484,7 +599,8 @@ function initCalculator() {
                 h("div", { class: "stub-actions" },
                     saveButton,
                     isSaved ? h("a", { class: "btn btn-quiet", href: "my-trips.html" }, "View my trips") : null),
-                h("p", { class: "stub-note" }, "Hotel rates are per person, per night. Food and transport are estimated from the hotel rate.")));
+                h("p", { class: "stub-note" }, "Hotel rates are per person, per night. Food and transport are estimated from the hotel rate." +
+                    (cur !== homeCurrency ? " Local prices are in " + cur + ", converted at " + (ratesAreLive ? "today's" : "an approximate") + " rate." : ""))));
 
         if (!printed) {
             printed = true;
@@ -590,6 +706,7 @@ function initTrips() {
                     removeButton)));
     }
 
+    currencyListeners.push(() => render());
     function render() {
         summary.textContent = trips.length ? plural(trips.length, "saved trip", "saved trips") + ", newest first." : "";
         if (trips.length === 0) {
@@ -641,23 +758,44 @@ function initSaved() {
         }
         favoriteIds = new Set(favorites.map((f) => f.landmark.id));
         if (favorites.length === 0) { updateSummary(); return; }
-        grid.replaceChildren(...favorites.map((f) => placeCard(f.landmark, (site, saved, card) => {
-            if (!saved) { card.remove(); updateSummary(); }
+        savedList = favorites;
+        draw();
+    }
+    let savedList = [];
+    function draw() {
+        grid.replaceChildren(...savedList.map((f) => placeCard(f.landmark, (site, saved, card) => {
+            if (!saved) { savedList = savedList.filter((x) => x.landmark.id !== site.id); card.remove(); updateSummary(); }
         })));
         updateSummary();
     }
+    currencyListeners.push(() => { if (savedList.length) draw(); });
     load();
 }
 
 // ==========================================
 // START
 // ==========================================
-if (token) {
+async function start() {
+    // 1. the currency chosen before, else the one saved on the account, else the browser region
+    let chosen = session.get("currency");
+    let fromAccount = false;
+    if (!chosen) {
+        try { chosen = (await api("/auth/me")).home_currency; fromAccount = !!chosen; } catch (e) { /* ignore */ }
+    }
+    const firstTime = !chosen;
+    if (!chosen || !CURRENCIES[chosen]) chosen = detectCurrency();
+    homeCurrency = chosen;
+    try { localStorage.setItem("currency", chosen); } catch (e) { /* ignore */ }
+    if (firstTime) api("/auth/currency", "PUT", { currency: chosen }).catch(() => {});
+
     buildHeader();
     buildFooter();
+    if (firstTime) toast("Prices show in " + CURRENCIES[chosen] + ". Change it from the menu at the top.");
+    await loadRates();
     const page = document.body.dataset.page;
     if (page === "home") initHome();
     else if (page === "calculator") initCalculator();
     else if (page === "trips") initTrips();
     else if (page === "saved") initSaved();
 }
+if (token) start();
