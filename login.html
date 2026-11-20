@@ -11,10 +11,12 @@
 </head>
 <body class="is-auth">
 <main>
-  <div class="auth-art">
-    <div>
-      <h2>Know what a trip to the Taj Mahal costs before you book.</h2>
-      <p>Budgets for landmarks in 20+ countries, saved to your account.</p>
+  <div class="auth-art" id="art">
+    <div class="art-layer on" id="layerA" style="background-image:url('images/taj.jpg')"></div>
+    <div class="art-layer" id="layerB"></div>
+    <div class="art-text" id="artText">
+      <h2 id="artLine">Know what a trip to the Taj Mahal costs before you book.</h2>
+      <p>Budgets for famous landmarks, shown in your own currency and saved to your account.</p>
     </div>
   </div>
   <div class="auth-panel">
@@ -57,6 +59,37 @@
 const API_URL = "";
 
 try { if (localStorage.getItem("token")) { window.location.href = "index.html"; } } catch (e) { /* ignore */ }
+
+// Photo and sentence change together every few seconds
+const SLIDES = [
+    { img: "images/taj.jpg", line: "Know what a trip to the Taj Mahal costs before you book." },
+    { img: "images/colosseum.jpg", line: "Stand inside the Colosseum without guessing the bill." },
+    { img: "images/machu.jpg", line: "Plan the climb to Machu Picchu with a budget you trust." },
+    { img: "images/petra.jpg", line: "See Petra's rose-red cliffs. Know the cost first." },
+    { img: "images/pyramid.jpg", line: "The Pyramids of Giza, priced for your days and your group." },
+    { img: "images/greatwall.jpg", line: "Walk the Great Wall with every cost laid out." },
+    { img: "images/eiffel.jpg", line: "Paris on a plan: what the Eiffel Tower trip really costs." },
+    { img: "images/Mount-Fuji.jpg", line: "Climb Mount Fuji knowing what the trip will cost." }
+];
+(function () {
+    const layers = [document.getElementById("layerA"), document.getElementById("layerB")];
+    const text = document.getElementById("artText");
+    const line = document.getElementById("artLine");
+    if (!layers[0] || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let index = 0, front = 0;
+    SLIDES.forEach((s) => { const i = new Image(); i.src = s.img; });
+    setInterval(() => {
+        if (document.hidden) return;
+        index = (index + 1) % SLIDES.length;
+        const back = 1 - front;
+        layers[back].style.backgroundImage = "url('" + SLIDES[index].img + "')";
+        layers[back].classList.add("on");
+        layers[front].classList.remove("on");
+        front = back;
+        text.classList.add("out");
+        setTimeout(() => { line.textContent = SLIDES[index].line; text.classList.remove("out"); }, 500);
+    }, 6000);
+})();
 
 let mode = "login";
 const form = document.getElementById("authForm");
