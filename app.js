@@ -477,9 +477,27 @@ function initHome() {
 // PAGE: BUDGET ESTIMATOR
 // ==========================================
 const STYLES = {
-    budget: { mult: 0.5, label: "Backpacker" },
-    standard: { mult: 1, label: "Standard" },
-    luxury: { mult: 2.5, label: "Luxury" }
+    budget: {
+        mult: 0.5, label: "Backpacker",
+        desc: "The lowest cost. You sleep in hostels or simple guesthouses, eat at local eateries and street stalls, and get around by bus, train or on foot. Costs about half of Standard.",
+        stay: "A hostel bed or basic guesthouse room.",
+        food: "Street food and local eateries.",
+        move: "Buses, trains and walking."
+    },
+    standard: {
+        mult: 1, label: "Standard",
+        desc: "Comfortable and balanced. You stay in mid-range hotels (about 3 stars), eat at local restaurants and cafes, and mix taxis or ride-hailing with public transport. This is the base rate.",
+        stay: "A mid-range hotel room, about 3 stars.",
+        food: "Local restaurants and cafes.",
+        move: "Taxis or ride-hailing, plus some public transport."
+    },
+    luxury: {
+        mult: 2.5, label: "Luxury",
+        desc: "Premium comfort. You stay in 4 to 5 star hotels, eat at fine restaurants, and travel with private drivers or airport transfers. Costs 2.5 times Standard.",
+        stay: "A 4 to 5 star hotel room.",
+        food: "Fine dining and top-rated restaurants.",
+        move: "Private drivers and airport transfers."
+    }
 };
 
 function estimate(site, days, travelers, mult) {
@@ -541,6 +559,7 @@ function initCalculator() {
     }
 
     function render() {
+        $("#styleDesc").textContent = STYLES[currentStyle()].desc;
         const site = landmarks.find((s) => String(s.id) === landmarkSelect.value);
         if (!site) { renderEmpty(); return; }
 
@@ -552,11 +571,19 @@ function initCalculator() {
         const key = [site.id, days, travelers, styleKey].join("|");
         const isSaved = key === lastSavedKey;
 
+        const st = STYLES[styleKey];
+        const rate = Number(site.hotel_rate) || 0;
+        const perDay = (share) => formatMoney(rate * share * st.mult, cur);
+        const fee = formatFee(site);
         const parts = [
-            { label: "Accommodation", value: est.accom, color: "var(--verd)" },
-            { label: "Food and dining", value: est.food, color: "var(--brass)" },
-            { label: "Local transport", value: est.transport, color: "var(--slate)" },
-            { label: "Landmark entry", value: est.entry, color: "var(--stamp)" }
+            { label: "Accommodation", value: est.accom, color: "var(--verd)",
+              detail: st.stay + " " + plural(days, "day", "days") + " x " + plural(travelers, "traveler", "travelers") + " x " + perDay(1) + " per person per day." },
+            { label: "Food and dining", value: est.food, color: "var(--brass)",
+              detail: st.food + " Set at half the hotel rate: " + perDay(0.5) + " per person per day." },
+            { label: "Local transport", value: est.transport, color: "var(--slate)",
+              detail: st.move + " Set at 30% of the hotel rate: " + perDay(0.3) + " per person per day." },
+            { label: "Landmark entry", value: est.entry, color: "var(--stamp)",
+              detail: fee === "Free" ? "Entry to " + site.title + " is free." : "Entry ticket of " + fee + " x " + plural(travelers, "traveler", "travelers") + ", paid once." }
         ];
 
         const photo = safeImage(site.icon);
@@ -592,7 +619,8 @@ function initCalculator() {
                         h("span", { class: "dot", style: "background:" + p.color }),
                         p.label,
                         h("span", { class: "fill" }),
-                        h("span", { class: "amt" }, formatMoney(p.value, cur)))))),
+                        h("span", { class: "amt" }, formatMoney(p.value, cur)),
+                        h("p", { class: "detail" }, p.detail))))),
             h("div", { class: "ticket-stub" },
                 h("p", { class: "stub-label" }, "Estimated total"),
                 h("p", { class: "stub-total" }, formatMoney(est.total, cur)),
