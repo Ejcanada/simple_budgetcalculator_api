@@ -238,7 +238,8 @@ const NAV = [
     { page: "calculator", href: "calculator.html", label: "Budget estimator" },
     { page: "trips", href: "my-trips.html", label: "My trips" },
     { page: "saved", href: "saved.html", label: "Saved places" },
-    { page: "matcher", href: "matcher.html", label: "Budget matcher" }
+    { page: "matcher", href: "matcher.html", label: "Budget matcher" },
+    { page: "admin", href: "admin.html", label: "Admin", adminOnly: true }
 ];
 
 function buildHeader() {
@@ -256,7 +257,7 @@ function buildHeader() {
     }, icon("menu", 22));
 
     const nav = h("nav", { class: "nav", id: "siteNav", "aria-label": "Main" },
-        NAV.map((item) => h("a", { href: item.href, "aria-current": item.page === current ? "page" : null }, item.label)),
+        NAV.filter((item) => !item.adminOnly || session.get("role") === "admin").map((item) => h("a", { href: item.href, "aria-current": item.page === current ? "page" : null }, item.label)),
         h("button", { class: "btn-link nav-logout", type: "button", onclick: logout }, "Log out"));
 
     const currencySelect = h("select", { class: "cur", id: "currency", "aria-label": "Show prices in" },
@@ -945,6 +946,209 @@ function initMatcher() {
 }
 
 // ==========================================
+// PAGE: ADMIN (add, view, edit and delete landmarks)
+// The API also checks the role, so a normal user cannot use these routes even by typing the address.
+// ==========================================
+const LANDMARK_FIELDS = [
+    { key: "title", label: "Name", required: true, max: 150, wide: true },
+    { key: "country", label: "Country", required: true, max: 100 },
+    { key: "city", label: "City", required: true, max: 100 },
+    { key: "region", label: "Region", required: true, max: 100, hint: "For example Europe or Southeast Asia." },
+    { key: "site_type", label: "Type of site", required: true, max: 100, hint: "For example Ancient ruin." },
+    { key: "established_year", label: "Year built", required: true, type: "number", hint: "Use a minus sign for BCE, for example -447." },
+    { key: "entry_fee", label: "Entry fee", required: true, max: 50, hint: "For example 16 EUR, or Free." },
+    { key: "currency", label: "Local currency", required: true, type: "currency" },
+    { key: "hotel_rate", label: "Hotel rate per night", required: true, type: "number", min: 1, hint: "In the local currency, per person." },
+    { key: "visitor_rating", label: "Visitor rating", max: 5, hint: "Format 4.8/5." },
+    { key: "annual_visitors", label: "Visitors a year", max: 20, hint: "For example 6.0M." },
+    { key: "governing_body", label: "Managed by", max: 150 },
+    { key: "notable_architects", label: "Built by", max: 150 },
+    { key: "protection_status", label: "Protection status", max: 100 },
+    { key: "icon", label: "Photo", max: 200, wide: true, hint: "A file in the images folder, for example /images/colosseum.jpg." },
+    { key: "description", label: "Description", type: "textarea", max: 500, wide: true }
+];
+
+function initAdmin() {
+    const list = $("#adminList");
+    const summary = $("#summary");
+    const dialog = $("#landmarkDialog");
+    const form = $("#landmarkForm");
+    const fieldBox = $("#formFields");
+    const formMessage = $("#formMessage");
+    const confirmDialog = $("#confirmDialog");
+    let items = [];
+    let editing = null;      // the landmark being edited, or null when adding
+    let toDelete = null;
+    const filters = { query: "", country: "" };
+
+    if (session.get("role") !== "admin") {
+        $("#adminBody").replaceChildren(h("div", { class: "state" },
+            h("h2", null, "Admins only."),
+            h("p", null, "Your account can't manage landmarks. Log in with an admin account to continue."),
+            h("a", { class: "btn btn-primary", href: "index.html" }, "Back to landmarks")));
+        return;
+    }
+
+    // Build the form fields once
+    const inputs = {};
+    LANDMARK_FIELDS.forEach((field) => {
+        let control;
+        if (field.type === "textarea") {
+            control = h("textarea", { id: "f_" + field.key, rows: 3, maxlength: field.max });
+        } else if (field.type === "currency") {
+            control = h("select", { id: "f_" + field.key }, Object.keys(CURRENCIES).sort().map((code) => h("option", { value: code }, code + " - " + CURRENCIES[code])));
+        } else {
+            control = h("input", {
+                id: "f_" + field.key, type: field.type === "number" ? "number" : "text",
+                maxlength: field.max, min: field.min, autocomplete: "off"
+            });
+        }
+        if (field.required) control.required = true;
+        inputs[field.key] = control;
+        fieldBox.append(h("div", { class: "field-row" + (field.wide ? " wide" : "") },
+            h("label", { for: "f_" + field.key }, field.label + (field.required ? "" : " (optional)")),
+            control,
+            field.hint ? h("p", { class: "hint" }, field.hint) : null));
+    });
+    inputs.icon.addEventListener("input", () => {
+        const preview = $("#photoPreview");
+        const src = safeImage(inputs.icon.value.trim());
+        preview.hidden = !src;
+        if (src) preview.src = src;
+    });
+
+    function openForm(site) {
+        editing = site || null;
+        $("#dialogTitle").textContent = site ? "Edit " + site.title : "Add a landmark";
+        $("#saveBtn").textContent = site ? "Save changes" : "Add landmark";
+        formMessage.className = "msg";
+        LANDMARK_FIELDS.forEach((field) => {
+            const value = site && site[field.key] !== null && site[field.key] !== undefined ? site[field.key] : "";
+            inputs[field.key].value = value === "" && field.type === "currency" ? homeCurrency : value;
+        });
+        inputs.icon.dispatchEvent(new Event("input"));
+        dialog.showModal();
+    }
+
+    function readForm() {
+        const data = {};
+        LANDMARK_FIELDS.forEach((field) => {
+            const raw = inputs[field.key].value.trim();
+            if (field.type === "number") data[field.key] = raw === "" ? null : parseInt(raw, 10);
+            else data[field.key] = raw === "" ? null : raw;
+        });
+        return data;
+    }
+
+    function errorText(error) { return error && error.message ? error.message : "Something went wrong. Try again."; }
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const data = readForm();
+        const button = $("#saveBtn");
+        button.disabled = true;
+        formMessage.className = "msg";
+        try {
+            if (editing) {
+                // only send what changed
+                const changes = {};
+                Object.keys(data).forEach((key) => { if (data[key] !== (editing[key] === undefined ? null : editing[key])) changes[key] = data[key]; });
+                if (Object.keys(changes).length === 0) { dialog.close(); toast("Nothing changed."); return; }
+                await api("/landmarks/" + editing.id, "PATCH", changes);
+                toast(data.title + " saved.");
+            } else {
+                Object.keys(data).forEach((key) => { if (data[key] === null) delete data[key]; });
+                await api("/landmarks", "POST", data);
+                toast(data.title + " added.");
+            }
+            landmarksCache = null;
+            dialog.close();
+            await load();
+        } catch (error) {
+            formMessage.textContent = errorText(error);
+            formMessage.className = "msg error";
+        } finally {
+            button.disabled = false;
+        }
+    });
+    $("#cancelBtn").addEventListener("click", () => dialog.close());
+
+    confirmDialog.addEventListener("close", async () => {
+        if (confirmDialog.returnValue !== "confirm" || !toDelete) { toDelete = null; return; }
+        const site = toDelete;
+        toDelete = null;
+        try {
+            await api("/landmarks/" + site.id, "DELETE");
+            landmarksCache = null;
+            toast(site.title + " deleted.");
+            await load();
+        } catch (error) { toast(errorText(error), "error"); }
+    });
+
+    function askDelete(site) {
+        toDelete = site;
+        $("#dlgText").textContent = site.title + " will be removed for everyone. Trips, saved places and reviews that use it are removed too. This can't be undone.";
+        confirmDialog.returnValue = "";
+        confirmDialog.showModal();
+    }
+
+    function row(site) {
+        const photo = safeImage(site.icon);
+        return h("li", { class: "admin-row" },
+            photo ? h("img", { src: photo, alt: "", loading: "lazy" }) : h("span", { class: "no-photo" }),
+            h("div", { class: "admin-main" },
+                h("strong", null, site.title),
+                h("span", null, [site.city, site.country].filter(Boolean).join(", "))),
+            h("div", { class: "admin-meta" }, h("span", null, site.site_type || ""), h("span", null, site.region || "")),
+            h("div", { class: "admin-meta" }, h("span", null, "Entry " + (site.entry_fee || "-")), h("span", null, "Hotel " + Number(site.hotel_rate || 0).toLocaleString() + " " + (site.currency || ""))),
+            h("div", { class: "admin-actions" },
+                h("button", { class: "btn btn-quiet btn-sm", type: "button", onclick: () => openForm(site) }, "Edit"),
+                h("button", { class: "btn btn-danger btn-sm", type: "button", onclick: () => askDelete(site) }, "Delete")));
+    }
+
+    function render() {
+        const q = filters.query.trim().toLowerCase();
+        const shown = items.filter((s) =>
+            (!filters.country || s.country === filters.country) &&
+            (!q || [s.title, s.country, s.city, s.region, s.site_type].join(" ").toLowerCase().includes(q)));
+        const countries = new Set(items.map((s) => s.country)).size;
+        summary.textContent = plural(items.length, "landmark", "landmarks") + " in " + plural(countries, "country", "countries") +
+            (shown.length !== items.length ? ". Showing " + shown.length + "." : ".");
+        if (shown.length === 0) {
+            list.replaceChildren(h("li", { class: "admin-empty" }, items.length ? "No landmarks match your search." : "No landmarks yet. Add the first one."));
+            return;
+        }
+        list.replaceChildren(...shown.map(row));
+    }
+
+    function fillCountries() {
+        const select = $("#countryFilter");
+        const current = filters.country;
+        const names = Array.from(new Set(items.map((s) => s.country))).sort();
+        select.replaceChildren(h("option", { value: "" }, "All countries"), names.map((n) => h("option", { value: n }, n)));
+        select.value = names.includes(current) ? current : "";
+        filters.country = select.value;
+    }
+
+    async function load() {
+        try {
+            const data = await api("/landmarks");
+            items = (data.landmarks || []).slice().sort((a, b) => (a.country + a.title).localeCompare(b.country + b.title));
+            fillCountries();
+            render();
+        } catch (error) {
+            showError(list, errorText(error), load);
+        }
+    }
+
+    $("#addBtn").addEventListener("click", () => openForm(null));
+    $("#adminSearch").addEventListener("input", (event) => { filters.query = event.target.value; render(); });
+    $("#countryFilter").addEventListener("change", (event) => { filters.country = event.target.value; render(); });
+    showSkeleton(list, 5);
+    load();
+}
+
+// ==========================================
 // START
 // ==========================================
 async function start() {
@@ -970,5 +1174,6 @@ async function start() {
     else if (page === "trips") initTrips();
     else if (page === "saved") initSaved();
     else if (page === "matcher") initMatcher();
+    else if (page === "admin") initAdmin();
 }
 if (token) start();
