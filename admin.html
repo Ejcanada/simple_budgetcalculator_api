@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Display&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<title>Admin | Heritage Travels</title>
+</head>
+<body data-page="admin">
+<header class="site-header" id="siteHeader"></header>
+<main>
+  <div class="wrap" id="adminBody">
+    <div class="page-head row">
+      <div>
+        <h1>Manage landmarks</h1>
+        <p id="summary" aria-live="polite"></p>
+      </div>
+      <button class="btn btn-primary" type="button" id="addBtn">Add a landmark</button>
+    </div>
+    <div class="admin-tools">
+      <div class="filter">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <input id="adminSearch" type="search" placeholder="Search by name, city or country" aria-label="Search landmarks">
+      </div>
+      <select id="countryFilter" aria-label="Filter by country"></select>
+    </div>
+    <ul class="admin-list" id="adminList"></ul>
+  </div>
+</main>
+
+<dialog id="landmarkDialog" class="wide-dialog" aria-labelledby="dialogTitle">
+  <form id="landmarkForm">
+    <h2 id="dialogTitle">Add a landmark</h2>
+    <div class="form-grid" id="formFields"></div>
+    <img id="photoPreview" class="photo-preview" alt="Photo preview" hidden>
+    <div class="msg" id="formMessage" role="alert"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-quiet" type="button" id="cancelBtn">Cancel</button>
+      <button class="btn btn-primary" type="submit" id="saveBtn">Add landmark</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirmDialog" aria-labelledby="dlgTitle">
+  <form method="dialog">
+    <h2 id="dlgTitle">Delete this landmark?</h2>
+    <p id="dlgText"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-quiet" value="cancel">Keep it</button>
+      <button class="btn btn-danger" value="confirm">Delete landmark</button>
+    </div>
+  </form>
+</dialog>
+<footer class="site-footer" id="siteFooter"></footer>
+<script src="app.js"></script>
+</body>
+</html>
